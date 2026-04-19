@@ -5,7 +5,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const OPENROUTER_KEY = process.env.OPENROUTER_KEY || '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';
+const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+if (!OPENROUTER_KEY) throw new Error('OPENROUTER_KEY manquante');
 
 function extractJSON(text) {
   const trimmed = text.trim();
