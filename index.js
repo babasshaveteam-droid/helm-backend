@@ -254,13 +254,21 @@ app.post('/generer-activites', async (req, res) => {
     return res.json(MOCK_ACTIVITIES);
   }
 
-  // Global safety timeout: sends mock if the whole pipeline hangs
+  // Outer scope so the safety timer can fall back to real places if Claude hangs
+  let candidates = null;
+
+  // Safety timeout: use real Google places if available, else mock
   const safetyTimer = setTimeout(() => {
     if (!res.headersSent) {
-      console.warn('[backend] Timeout 12s dépassé — fallback mock');
-      res.json(MOCK_ACTIVITIES);
+      if (candidates?.length) {
+        console.warn('[backend] Timeout 25s — fallback lieux Google bruts');
+        res.json(placesToFallback(candidates, latitude, longitude));
+      } else {
+        console.warn('[backend] Timeout 25s — fallback mock');
+        res.json(MOCK_ACTIVITIES);
+      }
     }
-  }, 12000);
+  }, 25000);
 
   try {
     // 3. Google Places Nearby Search
@@ -283,7 +291,7 @@ app.post('/generer-activites', async (req, res) => {
     // 4. Normalize → deduplicate → limit to 12
     const normalized = rawPlaces.map(normalizePlace);
     const deduped = deduplicate(normalized);
-    const candidates = deduped.slice(0, 12);
+    candidates = deduped.slice(0, 12); // assigned to outer scope for timeout fallback
     console.log(`[backend] ${candidates.length} lieux candidats après déduplification`);
 
     // Map for O(1) lookup during merge
