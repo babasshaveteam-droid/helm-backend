@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { fetchNearbyPlaces } = require('./places');
-const { normalizePlace, deduplicate } = require('./normalize');
+const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
 
 const app = express();
@@ -288,10 +288,10 @@ app.post('/generer-activites', async (req, res) => {
       return;
     }
 
-    // 4. Normalize → deduplicate → limit to 12
+    // 4. Normalize → deduplicate → filter fast-food → limit to 6
     const normalized = rawPlaces.map(normalizePlace);
-    const deduped = deduplicate(normalized);
-    candidates = deduped.slice(0, 12); // assigned to outer scope for timeout fallback
+    const deduped = deduplicate(normalized).filter(isFamilyPlace);
+    candidates = deduped.slice(0, 6); // assigned to outer scope for timeout fallback
     console.log(`[backend] ${candidates.length} lieux candidats après déduplification`);
 
     // Map for O(1) lookup during merge

@@ -40,4 +40,11 @@ function deduplicate(places) {
   });
 }
 
-module.exports = { normalizePlace, deduplicate, normalizeKey };
+const FAST_FOOD_BLACKLIST = ['mcdonald', 'kfc', 'quick', 'burger king', 'subway', 'kebab', 'pizza hut', 'domino'];
+
+function isFamilyPlace(place) {
+  const n = place.name.toLowerCase();
+  return !FAST_FOOD_BLACKLIST.some(f => n.includes(f));
+}
+
+module.exports = { normalizePlace, deduplicate, normalizeKey, isFamilyPlace };
