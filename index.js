@@ -104,9 +104,10 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
     practicalInfos: Array.isArray(claudeItem.practicalInfos)
       ? claudeItem.practicalInfos
       : place.isOpen != null
-        ? [place.isOpen ? 'Ouvert maintenant' : 'Fermé actuellement']
+        ? [place.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir']
         : [],
     tags: Array.isArray(claudeItem.tags) ? claudeItem.tags : [],
+    effortLevel: claudeItem.effortLevel || null,
     source: 'google_places',
     sourceId: place.sourceId,
   };
@@ -201,10 +202,12 @@ Règles STRICTES :
 6. Textes courts et chaleureux — style Helm (max 1 phrase par champ texte)
 7. Retourne UNIQUEMENT un tableau JSON valide strict, sans markdown, sans texte avant ou après
 8. N'invente AUCUNE information factuelle précise absente des données source : pas de nombre de marches, distances exactes, prix précis, horaires exacts, "parking proche", "365 marches", "accès WiFi". Si incertain → "à vérifier avant de partir"
-9. effortLevel : évalue honnêtement selon le lieu — "Facile" (parc, bibliothèque, musée accessible, café), "Moyen" (cathédrale avec visite, grand musée, culture étendue), "Aventure" (randonnée, montagne, terrain difficile, plusieurs heures de marche)
+9. effortLevel : évalue honnêtement selon le lieu — "Facile" (parc, bibliothèque, musée accessible, café), "Moyen" (cathédrale avec visite, grand musée, culture étendue), "Aventure" (randonnée, montagne, terrain difficile, plusieurs heures de marche). Ce champ est OBLIGATOIRE.
 10. whyGoodIdea : 1 phrase concrète et utile pour un parent — ex: "Une belle sortie pour marcher et profiter d'un grand panorama en famille." Éviter les formules marketing comme "émerveillera toute la famille"
 11. subtitle : expliquer pour quel type de famille c'est adapté, différent du whyGoodIdea — ex: "Idéal pour les familles qui aiment marcher et passer du temps en nature."
 12. Ordre de priorité : (1) activités faciles à organiser et proches, (2) culturelles accessibles, (3) nature accessible, (4) aventure en dernier — si aventure, effortLevel="Aventure" obligatoire
+13. Titres en français : utilise le nom français officiel du lieu quand il existe — ex: "Cathédrale Saint-Nicolas" et non "St-Nicolas Cathedral", "Musée d'art et d'histoire" et non "Museum of Art and History". Conserve le nom officiel s'il n'a pas d'équivalent français naturel.
+14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles.
 
 Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ) :
 {
