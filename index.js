@@ -44,6 +44,61 @@ function toDistanceMinutes(km) {
   return min < 60 ? `${min} min à pied` : `${Math.round(min / 60)}h à pied`;
 }
 
+function formatTravelTime(seconds) {
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min en voiture`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m > 0 ? `${h}h${String(m).padStart(2, '0')} en voiture` : `${h}h en voiture`;
+}
+
+function formatRouteDistance(meters) {
+  return meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1)} km`;
+}
+
+async function fetchTravelTimes(userLat, userLon, places, apiKey) {
+  const valid = places.filter(p => p.lat != null && p.lon != null);
+  if (!valid.length) return places;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'routeMatrixElements.duration,routeMatrixElements.distanceMeters,routeMatrixElements.status',
+      },
+      body: JSON.stringify({
+        origins: [{ location: { latLng: { latitude: userLat, longitude: userLon } } }],
+        destinations: valid.map(p => ({ location: { latLng: { latitude: p.lat, longitude: p.lon } } })),
+        travelMode: 'DRIVE',
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      console.warn('[routes] Routes API erreur:', res.status);
+      return places;
+    }
+    const elements = await res.json();
+    console.log(`[routes] ${elements.length} trajets reçus`);
+    const travelMap = new Map();
+    elements.forEach((el, i) => {
+      if (el.status === 'OK' && valid[i]) {
+        const secs = el.duration ? parseInt(el.duration.replace('s', ''), 10) : null;
+        travelMap.set(valid[i].sourceId, {
+          routeDurationSeconds: secs,
+          routeDistanceMeters: el.distanceMeters ?? null,
+        });
+      }
+    });
+    return places.map(p => ({ ...p, ...(travelMap.get(p.sourceId) ?? {}) }));
+  } catch (e) {
+    console.warn('[routes] fetchTravelTimes échoue:', e.message, '→ fallback distances vol d\'oiseau');
+    return places;
+  }
+}
+
 const TYPE_EMOJI = {
   park: '🌳', museum: '🏛️', library: '📚',
   tourist_attraction: '🎡', cafe: '☕',
@@ -108,6 +163,10 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
         : [],
     tags: Array.isArray(claudeItem.tags) ? claudeItem.tags : [],
     effortLevel: claudeItem.effortLevel || null,
+    travelTimeLabel: place.routeDurationSeconds != null ? formatTravelTime(place.routeDurationSeconds) : null,
+    travelDistanceLabel: place.routeDistanceMeters != null ? formatRouteDistance(place.routeDistanceMeters) : null,
+    routeDurationSeconds: place.routeDurationSeconds ?? null,
+    routeDistanceMeters: place.routeDistanceMeters ?? null,
     source: 'google_places',
     sourceId: place.sourceId,
   };
@@ -330,7 +389,10 @@ app.post('/generer-activites', async (req, res) => {
     }
     console.log(`[backend] ${candidates.length} lieux candidats (${excludeSet.size} exclus)`);
 
-    // Map for O(1) lookup during merge
+    // 4.5. Routes API — attach real driving times (non-blocking, 5s timeout)
+    candidates = await fetchTravelTimes(latitude, longitude, candidates, GOOGLE_PLACES_API_KEY);
+
+    // Map for O(1) lookup during merge (built after Routes API enrichment)
     const placesMap = new Map(candidates.map(p => [p.sourceId, p]));
 
     // 5. Claude / OpenRouter
