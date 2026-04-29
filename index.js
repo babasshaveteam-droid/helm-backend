@@ -195,20 +195,25 @@ Contexte :
 Règles STRICTES :
 1. Sélectionne 3 à 8 lieux UNIQUEMENT parmi ceux listés ci-dessus
 2. INTERDIT d'inventer ou d'ajouter un lieu absent de la liste
-3. Si le prix est inconnu → "À vérifier" pour priceLabel, null pour priceAmount
-4. Si les horaires sont inconnus → "À vérifier" dans practicalInfos
+3. Si le prix est inconnu → "Prix à vérifier" pour priceLabel, null pour priceAmount
+4. Si les horaires sont inconnus → "Horaires à vérifier avant de partir" dans practicalInfos
 5. Écarte les lieux inadaptés aux enfants ou trop formels
 6. Textes courts et chaleureux — style Helm (max 1 phrase par champ texte)
 7. Retourne UNIQUEMENT un tableau JSON valide strict, sans markdown, sans texte avant ou après
+8. N'invente AUCUNE information factuelle précise absente des données source : pas de nombre de marches, distances exactes, prix précis, horaires exacts, "parking proche", "365 marches", "accès WiFi". Si incertain → "à vérifier avant de partir"
+9. effortLevel : évalue honnêtement selon le lieu — "Facile" (parc, bibliothèque, musée accessible, café), "Moyen" (cathédrale avec visite, grand musée, culture étendue), "Aventure" (randonnée, montagne, terrain difficile, plusieurs heures de marche)
+10. whyGoodIdea : 1 phrase concrète et utile pour un parent — ex: "Une belle sortie pour marcher et profiter d'un grand panorama en famille." Éviter les formules marketing comme "émerveillera toute la famille"
+11. subtitle : expliquer pour quel type de famille c'est adapté, différent du whyGoodIdea — ex: "Idéal pour les familles qui aiment marcher et passer du temps en nature."
+12. Ordre de priorité : (1) activités faciles à organiser et proches, (2) culturelles accessibles, (3) nature accessible, (4) aventure en dernier — si aventure, effortLevel="Aventure" obligatoire
 
 Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ) :
 {
   "sourceId": "(sourceId exact du lieu, copié depuis la liste ci-dessus)",
   "emoji": "(1 emoji pertinent)",
   "titre": "(nom court du lieu)",
-  "subtitle": "(accroche courte et engageante, 1 phrase max)",
+  "subtitle": "(pour quel type de famille — différent de whyGoodIdea, 1 phrase max)",
   "duree": "(durée suggérée, ex: 2h)",
-  "priceLabel": "(Gratuit, À vérifier, ou prix estimé)",
+  "priceLabel": "(Gratuit, Prix à vérifier, ou prix estimé)",
   "priceAmount": (0 si gratuit, null si inconnu, nombre si connu),
   "type": "(outdoor|indoor|cultural|food|sport)",
   "minAgeLabel": "(Dès X ans ou Tout âge)",
@@ -219,9 +224,10 @@ Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ)
   "icon": "(même emoji que le champ emoji)",
   "colorTheme": "(couleur hex adaptée, ex: #4CAF7D pour Nature, #F0956A pour Culture)",
   "benefit": "(bénéfice principal en 5 mots max)",
-  "whyGoodIdea": "(pourquoi c'est une bonne idée — 1 phrase max, ton chaleureux)",
+  "whyGoodIdea": "(phrase concrète et utile pour un parent — ex: 'Une sortie nature pour marcher et explorer un paysage spectaculaire.')",
+  "effortLevel": "(Facile|Moyen|Aventure)",
   "whatToBring": ["(2 à 4 items pratiques)"],
-  "practicalInfos": ["(2 à 3 infos pratiques — horaires si isOpen connu, sinon À vérifier)"],
+  "practicalInfos": ["(2 à 3 infos pratiques — si isOpen connu utilise-le, sinon 'Horaires à vérifier avant de partir')"],
   "tags": ["(3 à 5 tags courts)"]
 }`;
 }
