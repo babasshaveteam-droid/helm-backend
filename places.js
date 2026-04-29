@@ -1,4 +1,10 @@
-const FAMILY_TYPES = ['park', 'museum', 'library', 'tourist_attraction', 'cafe'];
+// Rotate through different type groups on each refresh to surface varied places
+const SEARCH_GROUPS = [
+  ['park', 'museum', 'library', 'tourist_attraction', 'cafe'],
+  ['park', 'art_gallery', 'museum', 'tourist_attraction', 'amusement_center'],
+  ['museum', 'library', 'tourist_attraction', 'cafe', 'park'],
+  ['zoo', 'park', 'tourist_attraction', 'museum', 'art_gallery'],
+];
 
 // Only request the fields we actually use — minimises cost and payload
 const FIELD_MASK = [
@@ -12,7 +18,8 @@ const FIELD_MASK = [
   'places.currentOpeningHours.openNow',
 ].join(',');
 
-async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey) {
+async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0) {
+  const types = SEARCH_GROUPS[searchGroup % SEARCH_GROUPS.length];
   const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
     method: 'POST',
     headers: {
@@ -21,7 +28,7 @@ async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey) {
       'X-Goog-FieldMask': FIELD_MASK,
     },
     body: JSON.stringify({
-      includedTypes: FAMILY_TYPES,
+      includedTypes: types,
       maxResultCount: 20,
       locationRestriction: {
         circle: {

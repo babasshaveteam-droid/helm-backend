@@ -245,6 +245,7 @@ app.post('/generer-activites', async (req, res) => {
     radiusMeters = 15000,
     weather,
     filters,
+    searchGroup = 0,
   } = req.body;
 
   // 1. Validate coordinates
@@ -283,8 +284,8 @@ app.post('/generer-activites', async (req, res) => {
     // 3. Google Places Nearby Search
     let rawPlaces;
     try {
-      rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY);
-      console.log(`[backend] Google Places: ${rawPlaces.length} lieux reçus`);
+      rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup);
+      console.log(`[backend] Google Places: ${rawPlaces.length} lieux reçus (group ${searchGroup})`);
     } catch (placesErr) {
       console.error('[backend] Google Places échoue:', placesErr.message, '→ fallback mock');
       if (!res.headersSent) res.json(MOCK_ACTIVITIES);
@@ -297,11 +298,37 @@ app.post('/generer-activites', async (req, res) => {
       return;
     }
 
-    // 4. Normalize → deduplicate → filter fast-food → limit to 6
+    // 4. Normalize → deduplicate → filter family-appropriate → exclude already-seen
+    const excludeSet = new Set(Array.isArray(exclude) ? exclude : []);
     const normalized = rawPlaces.map(normalizePlace);
     const deduped = deduplicate(normalized).filter(isFamilyPlace);
-    candidates = deduped.slice(0, 6); // assigned to outer scope for timeout fallback
-    console.log(`[backend] ${candidates.length} lieux candidats après déduplification`);
+    let fresh = excludeSet.size > 0 ? deduped.filter(p => !excludeSet.has(p.sourceId)) : deduped;
+
+    // If too few fresh results after filtering, retry with a wider radius
+    if (fresh.length < 3 && excludeSet.size > 0) {
+      console.log(`[backend] Seulement ${fresh.length} candidats après exclusion — rayon élargi`);
+      try {
+        const widerRadius = Math.min(Math.round(radiusMeters * 1.5), 40000);
+        const rawPlaces2 = await fetchNearbyPlaces(latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4);
+        const fresh2 = deduplicate(rawPlaces2.map(normalizePlace))
+          .filter(isFamilyPlace)
+          .filter(p => !excludeSet.has(p.sourceId));
+        if (fresh2.length > fresh.length) {
+          fresh = fresh2;
+          console.log(`[backend] Rayon élargi (${widerRadius}m): ${fresh.length} nouveaux candidats`);
+        }
+      } catch (e) {
+        console.warn('[backend] Retry rayon élargi échoue:', e.message);
+      }
+    }
+
+    candidates = fresh.slice(0, 8);
+    if (!candidates.length) {
+      // All nearby places are excluded — serve raw fallback without exclusion
+      candidates = deduped.slice(0, 6);
+      console.warn('[backend] Tous les lieux exclus — fallback pool complet');
+    }
+    console.log(`[backend] ${candidates.length} lieux candidats (${excludeSet.size} exclus)`);
 
     // Map for O(1) lookup during merge
     const placesMap = new Map(candidates.map(p => [p.sourceId, p]));
