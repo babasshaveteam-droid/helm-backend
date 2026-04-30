@@ -123,8 +123,8 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
         'X-Goog-FieldMask': 'routeMatrixElements.duration,routeMatrixElements.distanceMeters',
       },
       body: JSON.stringify({
-        origins: [{ location: { latLng: { latitude: userLat, longitude: userLon } } }],
-        destinations: valid.map(p => ({ location: { latLng: { latitude: p.lat, longitude: p.lon } } })),
+        origins: [{ waypoint: { location: { latLng: { latitude: userLat, longitude: userLon } } } }],
+        destinations: valid.map(p => ({ waypoint: { location: { latLng: { latitude: p.lat, longitude: p.lon } } } })),
         travelMode: 'DRIVE',
       }),
       signal: controller.signal,
