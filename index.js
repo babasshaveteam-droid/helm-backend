@@ -124,18 +124,19 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
       return places;
     }
     const elements = await res.json();
-    const okCount = elements.filter(el => el.status === 'OK').length;
+    // Routes API returns status as {} (empty object) for success, never the string "OK"
+    const okCount = elements.filter(el => !!el.duration).length;
     console.log(`[routes] ${elements.length} trajets reçus, ${okCount} OK, ${elements.length - okCount} KO`);
     const travelMap = new Map();
     elements.forEach((el, i) => {
-      if (el.status === 'OK' && valid[i]) {
-        const secs = el.duration ? parseInt(el.duration.replace('s', ''), 10) : null;
+      if (el.duration && valid[i]) {
+        const secs = parseInt(el.duration.replace('s', ''), 10);
         travelMap.set(valid[i].sourceId, {
-          routeDurationSeconds: secs,
+          routeDurationSeconds: isNaN(secs) ? null : secs,
           routeDistanceMeters: el.distanceMeters ?? null,
         });
       } else if (valid[i]) {
-        console.warn(`[routes] KO pour ${valid[i].sourceId}: status=${el.status}`);
+        console.warn(`[routes] KO pour ${valid[i].sourceId}: pas de durée`);
       }
     });
     const enriched = places.map(p => ({ ...p, ...(travelMap.get(p.sourceId) ?? {}) }));
@@ -150,8 +151,12 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
 
 const TYPE_EMOJI = {
   park: '🌳', museum: '🏛️', library: '📚',
-  tourist_attraction: '🎡', cafe: '☕',
-  amusement_center: '🎮', swimming_pool: '🏊',
+  tourist_attraction: '🗺️', cafe: '☕',
+  amusement_park: '🎡', amusement_center: '🎮',
+  swimming_pool: '🏊', castle: '🏰',
+  historic_site: '🏛️', natural_feature: '🌿',
+  nature_reserve: '🦋', zoo: '🦁',
+  aquarium: '🐠', botanical_garden: '🌸',
 };
 
 function typeEmoji(types = []) {
@@ -323,6 +328,7 @@ Règles STRICTES :
 12. Ordre de priorité : (1) activités faciles à organiser et proches, (2) culturelles accessibles, (3) nature accessible, (4) aventure en dernier — si aventure, effortLevel="Aventure" obligatoire
 13. Titres en français : utilise le nom français officiel du lieu quand il existe — ex: "Cathédrale Saint-Nicolas" et non "St-Nicolas Cathedral", "Musée d'art et d'histoire" et non "Museum of Art and History". Conserve le nom officiel s'il n'a pas d'équivalent français naturel.
 14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles.
+15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse, 🌲 forêt/réserve/montagne, 🏛️ musée/monument historique, ⛰️ randonnée/sommet, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc, 🎡 UNIQUEMENT pour vrai parc d'attractions. Jamais 🎡 pour un château, un site naturel ou un musée.
 
 Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ) :
 {
@@ -340,7 +346,7 @@ Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ)
   "weatherFit": ["(sunny|cloudy|rainy|any)"],
   "reservationRequired": (true|false),
   "icon": "(même emoji que le champ emoji)",
-  "colorTheme": "(couleur hex adaptée, ex: #4CAF7D pour Nature, #F0956A pour Culture)",
+  "colorTheme": "(UNIQUEMENT ces pastels: #E8F5E9 Nature, #FFF3E0 Culture, #E3F2FD Sport, #F3E5F5 Créatif, #F5F0FF Loisirs)",
   "benefit": "(bénéfice principal en 5 mots max)",
   "whyGoodIdea": "(phrase concrète et utile pour un parent — ex: 'Une sortie nature pour marcher et explorer un paysage spectaculaire.')",
   "effortLevel": "(Facile|Moyen|Aventure)",
