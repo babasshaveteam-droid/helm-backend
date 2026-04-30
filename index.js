@@ -141,15 +141,19 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
     const okCount = elements.filter(el => !!el.duration).length;
     console.log(`[routes] ${elements.length} trajets reçus, ${okCount} OK, ${elements.length - okCount} KO`);
     const travelMap = new Map();
-    elements.forEach((el, i) => {
-      if (el.duration && valid[i]) {
-        const secs = parseInt(el.duration.replace('s', ''), 10);
-        travelMap.set(valid[i].sourceId, {
+    elements.forEach((el) => {
+      const idx = typeof el.destinationIndex === 'number' ? el.destinationIndex : null;
+      if (idx === null || !valid[idx]) return;
+      if (el.duration) {
+        const raw = typeof el.duration === 'string' ? el.duration : String(el.duration?.seconds ?? '0');
+        const secs = parseInt(raw.replace('s', ''), 10);
+        console.log(`[routes] [${idx}] ${valid[idx].name}: ${raw} → ${secs}s, ${el.distanceMeters ?? '?'}m`);
+        travelMap.set(valid[idx].sourceId, {
           routeDurationSeconds: isNaN(secs) ? null : secs,
           routeDistanceMeters: el.distanceMeters ?? null,
         });
-      } else if (valid[i]) {
-        console.warn(`[routes] KO pour ${valid[i].sourceId}: pas de durée`);
+      } else {
+        console.warn(`[routes] KO [${idx}] ${valid[idx].name}: pas de durée`);
       }
     });
     const enriched = places.map(p => ({ ...p, ...(travelMap.get(p.sourceId) ?? {}) }));
@@ -537,6 +541,8 @@ app.post('/generer-activites', async (req, res) => {
     filters,
     searchGroup = 0,
   } = req.body;
+
+  console.log(`[backend] /generer-activites — lat=${latitude} lon=${longitude} radius=${radiusMeters} group=${searchGroup}`);
 
   // 1. Validate coordinates
   if (
