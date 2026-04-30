@@ -120,7 +120,7 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'routeMatrixElements.duration,routeMatrixElements.distanceMeters,routeMatrixElements.status',
+        'X-Goog-FieldMask': 'routeMatrixElements.duration,routeMatrixElements.distanceMeters',
       },
       body: JSON.stringify({
         origins: [{ location: { latLng: { latitude: userLat, longitude: userLon } } }],
@@ -132,7 +132,8 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
     clearTimeout(timer);
     console.log(`[routes] Réponse HTTP: ${res.status}`);
     if (!res.ok) {
-      console.warn('[routes] Routes API erreur:', res.status);
+      const errBody = await res.text();
+      console.warn('[routes] Routes API erreur:', res.status, errBody.slice(0, 300));
       return places;
     }
     const elements = await res.json();
@@ -435,8 +436,12 @@ function placesToFallback(places, userLat, userLon) {
           : ['Horaires à vérifier avant de partir'],
       tags: cleanTags(p.types),
       effortLevel: 'Facile',
-      travelTimeLabel: p.routeDurationSeconds != null ? formatTravelTime(p.routeDurationSeconds) : null,
-      travelDistanceLabel: p.routeDistanceMeters != null ? formatRouteDistance(p.routeDistanceMeters) : null,
+      travelTimeLabel: p.routeDurationSeconds != null
+        ? formatTravelTime(p.routeDurationSeconds)
+        : (km != null ? `~${Math.round((km / 50) * 60)} min en voiture` : null),
+      travelDistanceLabel: p.routeDistanceMeters != null
+        ? formatRouteDistance(p.routeDistanceMeters)
+        : (km != null ? `~${km.toFixed(1)} km` : null),
       routeDurationSeconds: p.routeDurationSeconds ?? null,
       routeDistanceMeters: p.routeDistanceMeters ?? null,
       source: 'google_places',
@@ -563,7 +568,7 @@ app.post('/generer-activites', async (req, res) => {
         res.json(MOCK_ACTIVITIES);
       }
     }
-  }, 25000);
+  }, 32000);
 
   try {
     // 3. Google Places Nearby Search
