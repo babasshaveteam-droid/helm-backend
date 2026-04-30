@@ -69,7 +69,7 @@ function guessCategory(types = []) {
 
 const TYPE_LABELS_FR = {
   park: 'parc', museum: 'musée', library: 'bibliothèque', zoo: 'zoo',
-  tourist_attraction: 'attraction', cafe: 'café', art_gallery: 'galerie',
+  tourist_attraction: 'à découvrir', cafe: 'café', art_gallery: 'galerie',
   amusement_center: 'loisirs', amusement_park: 'parc d\'attractions',
   natural_feature: 'nature', point_of_interest: 'lieu à découvrir',
 };
@@ -113,6 +113,8 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
+    console.log(`[routes] Envoi ${valid.length} destinations à computeRouteMatrix`);
+    valid.forEach((p, i) => console.log(`[routes]   [${i}] ${p.sourceId} (${p.name}) → ${p.lat},${p.lon}`));
     const res = await fetch('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
       method: 'POST',
       headers: {
@@ -128,6 +130,7 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
       signal: controller.signal,
     });
     clearTimeout(timer);
+    console.log(`[routes] Réponse HTTP: ${res.status}`);
     if (!res.ok) {
       console.warn('[routes] Routes API erreur:', res.status);
       return places;
@@ -160,7 +163,7 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
 
 const TYPE_EMOJI = {
   park: '🌳', museum: '🏛️', library: '📚',
-  tourist_attraction: '🗺️', cafe: '☕',
+  tourist_attraction: '📍', cafe: '☕',
   amusement_park: '🎡', amusement_center: '🎮',
   swimming_pool: '🏊', castle: '🏰',
   historic_site: '🏛️', natural_feature: '🌿',
@@ -171,6 +174,26 @@ const TYPE_EMOJI = {
 function typeEmoji(types = []) {
   for (const t of types) if (TYPE_EMOJI[t]) return TYPE_EMOJI[t];
   return '📍';
+}
+
+// ─── Heritage / religious site helpers ───────────────────────────────────────
+
+function isHeritageSite(name = '', types = []) {
+  return /abbaye|abbey|monastère|monastery|cathédrale|cathedral|église|church|chapelle|chapel|basilique|basilica|monument|prieuré|priory/i.test(name) ||
+    types.some(t => ['historic_site','church','hindu_temple','mosque','synagogue','castle'].includes(t));
+}
+
+function getHeritageTags(name = '') {
+  const n = name.toLowerCase();
+  if (/abbaye|abbey|monastère|monastery|prieuré/.test(n))
+    return ['patrimoine', 'architecture', 'histoire', 'calme', 'balade'];
+  if (/cathédrale|cathedral|basilique|basilica/.test(n))
+    return ['patrimoine', 'architecture', 'religieux', 'culture', 'calme'];
+  if (/église|church|chapelle|chapel/.test(n))
+    return ['patrimoine', 'religieux', 'calme', 'culture'];
+  if (/château|castle/.test(n))
+    return ['patrimoine', 'histoire', 'architecture', 'culture'];
+  return ['patrimoine', 'culture', 'architecture', 'calme'];
 }
 
 // ─── Title / emoji / category quality helpers ─────────────────────────────────
@@ -229,6 +252,8 @@ function determineCategoryOverride(types = [], name = '') {
 
 // ─── Fallback content by category ────────────────────────────────────────────
 
+const HERITAGE_WHAT_TO_BRING = ['Appareil photo', 'Eau', 'Chaussures confortables', 'Petite veste'];
+
 const WHAT_TO_BRING_DEFAULTS = {
   Nature:      ['Chaussures confortables', 'Bouteille d\'eau', 'Vêtements adaptés à la météo'],
   Culture:     ['Curiosité et questions des enfants', 'Appareil photo', 'Monnaie pour les entrées'],
@@ -239,7 +264,7 @@ const WHAT_TO_BRING_DEFAULTS = {
 
 const PRACTICAL_INFOS_DEFAULTS = {
   Nature:      ['Horaires à vérifier avant de partir', 'Accès en voiture conseillé'],
-  Culture:     ['Horaires à vérifier avant de partir', 'Tarifs à vérifier sur place'],
+  Culture:     ['Horaires à vérifier avant de partir', 'Adresse disponible dans l\'itinéraire', 'Prix à vérifier'],
   Sport:       ['Horaires à vérifier avant de partir', 'Réservation parfois nécessaire'],
   Gastronomie: ['Horaires à vérifier avant de partir', 'Réservation recommandée le week-end'],
   Loisirs:     ['Horaires à vérifier avant de partir', 'Adapté aux enfants'],
@@ -261,27 +286,32 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
       ? haversineKm(userLat, userLon, place.lat, place.lon)
       : null;
 
-  // Fix 4: emoji déterministe basé sur le nom/type du lieu
-  const emojiOverride = getEmojiOverride(place.types, place.name);
-  const emoji         = emojiOverride || claudeItem.emoji || typeEmoji(place.types);
-
   // Fix 2: titre en français (remplace les titres anglais)
   const titre = correctTitle(claudeItem.titre, place.name);
 
-  // Fix 3: catégorie déterministe (château → Culture, etc.)
+  // Fix 3: catégorie déterministe (château → Culture, etc.) — avant emoji
   const category = determineCategoryOverride(place.types, place.name)
                    || claudeItem.category
                    || guessCategory(place.types)
                    || 'Loisirs';
 
+  // Fix 4: emoji déterministe — jamais 🗺️/📍 pour un lieu culturel précis
+  const emojiOverride = getEmojiOverride(place.types, place.name);
+  const rawEmoji      = emojiOverride || claudeItem.emoji || typeEmoji(place.types);
+  const emoji = (category === 'Culture' && (rawEmoji === '🗺️' || rawEmoji === '📍'))
+    ? '🏛️'
+    : rawEmoji;
+
   // Fix 5: couleur restreinte aux 5 pastels exacts
   const colorTheme = safeColorTheme(claudeItem.colorTheme, category);
 
-  // Fix 6: fallback si Claude retourne whatToBring vide
+  // Fix 6: fallback whatToBring — priorité aux items Claude, sinon patrimoine, sinon catégorie
   const rawWhatToBring = Array.isArray(claudeItem.whatToBring) ? claudeItem.whatToBring : [];
   const whatToBring = rawWhatToBring.length > 0
     ? rawWhatToBring
-    : (WHAT_TO_BRING_DEFAULTS[category] ?? WHAT_TO_BRING_DEFAULTS.Loisirs);
+    : (isHeritageSite(place.name, place.types)
+        ? HERITAGE_WHAT_TO_BRING
+        : (WHAT_TO_BRING_DEFAULTS[category] ?? WHAT_TO_BRING_DEFAULTS.Loisirs));
 
   // Fix 6: fallback si Claude retourne practicalInfos vide
   const rawPractical = Array.isArray(claudeItem.practicalInfos) ? claudeItem.practicalInfos : [];
@@ -297,14 +327,22 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
     practicalInfos = PRACTICAL_INFOS_DEFAULTS[category] ?? ['Horaires à vérifier avant de partir'];
   }
 
-  // Fix 7: nettoyer les tags techniques Google (snake_case, etc.)
-  const rawTags = Array.isArray(claudeItem.tags) ? claudeItem.tags : [];
-  const tags = filterTags(rawTags).length > 0 ? filterTags(rawTags) : cleanTags(place.types);
+  // Fix 7: tags — nettoyer les tags techniques, fallback patrimoine si applicable
+  const rawTags     = Array.isArray(claudeItem.tags) ? claudeItem.tags : [];
+  const cleanedTags = filterTags(rawTags);
+  const tags = cleanedTags.length > 0
+    ? cleanedTags
+    : (isHeritageSite(place.name, place.types) ? getHeritageTags(place.name) : cleanTags(place.types));
 
   // Fix 1: travelTimeLabel avec fallback haversine si Routes API a échoué
   const travelTimeLabel = place.routeDurationSeconds != null
     ? formatTravelTime(place.routeDurationSeconds)
     : (km != null ? `~${Math.round((km / 50) * 60)} min en voiture` : null);
+  if (travelTimeLabel) {
+    console.log(`[merge] ${place.name}: travelTimeLabel="${travelTimeLabel}"`);
+  } else {
+    console.warn(`[merge] ${place.name}: travelTimeLabel NULL — routeDurationSeconds=${place.routeDurationSeconds}, km=${km?.toFixed(2) ?? 'null'}, lat=${place.lat}, lon=${place.lon}`);
+  }
 
   const travelDistanceLabel = place.routeDistanceMeters != null
     ? formatRouteDistance(place.routeDistanceMeters)
