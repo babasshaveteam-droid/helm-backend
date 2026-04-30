@@ -120,7 +120,7 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'duration,distanceMeters',
+        'X-Goog-FieldMask': '*',
       },
       body: JSON.stringify({
         origins: [{ waypoint: { location: { latLng: { latitude: userLat, longitude: userLon } } } }],
