@@ -44,6 +44,49 @@ function toDistanceMinutes(km) {
   return min < 60 ? `${min} min à pied` : `${Math.round(min / 60)}h à pied`;
 }
 
+// ─── Color & quality helpers ──────────────────────────────────────────────────
+
+const CATEGORY_PASTELS = {
+  Nature: '#E8F5E9', Culture: '#FFF3E0', Sport: '#E3F2FD',
+  Créatif: '#F3E5F5', Social: '#FFF9E6', Loisirs: '#F5F0FF',
+};
+
+function isColorLight(hex) {
+  if (!hex || typeof hex !== 'string' || !hex.startsWith('#') || hex.length !== 7) return false;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 >= 0.55;
+}
+
+function safeColorTheme(hex, category) {
+  return isColorLight(hex) ? hex : (CATEGORY_PASTELS[category] ?? '#F0EAE5');
+}
+
+function guessCategory(types = []) {
+  if (types.some(t => ['park', 'natural_feature', 'campground', 'rv_park'].includes(t))) return 'Nature';
+  if (types.some(t => ['museum', 'art_gallery', 'library'].includes(t))) return 'Culture';
+  if (types.some(t => ['zoo', 'amusement_park', 'amusement_center'].includes(t))) return 'Loisirs';
+  return 'Loisirs';
+}
+
+const TYPE_LABELS_FR = {
+  park: 'parc', museum: 'musée', library: 'bibliothèque', zoo: 'zoo',
+  tourist_attraction: 'attraction', cafe: 'café', art_gallery: 'galerie',
+  amusement_center: 'loisirs', amusement_park: 'parc d\'attractions',
+  natural_feature: 'nature', point_of_interest: 'lieu à découvrir',
+};
+
+function cleanTags(types = []) {
+  return types.map(t => TYPE_LABELS_FR[t]).filter(Boolean).slice(0, 3);
+}
+
+const SUBTITLE_BY_CATEGORY = {
+  Nature:  'Idéal pour prendre l\'air en famille et profiter d\'un moment dehors.',
+  Culture: 'Idéal pour une sortie calme et éducative avec des enfants curieux.',
+  Loisirs: 'Idéal pour une sortie simple et amusante avec les enfants.',
+};
+
 function formatTravelTime(seconds) {
   if (seconds < 3600) return `${Math.round(seconds / 60)} min en voiture`;
   const h = Math.floor(seconds / 3600);
@@ -81,7 +124,8 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
       return places;
     }
     const elements = await res.json();
-    console.log(`[routes] ${elements.length} trajets reçus`);
+    const okCount = elements.filter(el => el.status === 'OK').length;
+    console.log(`[routes] ${elements.length} trajets reçus, ${okCount} OK, ${elements.length - okCount} KO`);
     const travelMap = new Map();
     elements.forEach((el, i) => {
       if (el.status === 'OK' && valid[i]) {
@@ -90,9 +134,14 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
           routeDurationSeconds: secs,
           routeDistanceMeters: el.distanceMeters ?? null,
         });
+      } else if (valid[i]) {
+        console.warn(`[routes] KO pour ${valid[i].sourceId}: status=${el.status}`);
       }
     });
-    return places.map(p => ({ ...p, ...(travelMap.get(p.sourceId) ?? {}) }));
+    const enriched = places.map(p => ({ ...p, ...(travelMap.get(p.sourceId) ?? {}) }));
+    const withTime = enriched.filter(p => p.routeDurationSeconds != null).length;
+    console.log(`[routes] ${withTime}/${enriched.length} activités avec travelTimeLabel`);
+    return enriched;
   } catch (e) {
     console.warn('[routes] fetchTravelTimes échoue:', e.message, '→ fallback distances vol d\'oiseau');
     return places;
@@ -152,7 +201,7 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
     weatherFit: Array.isArray(claudeItem.weatherFit) ? claudeItem.weatherFit : ['any'],
     reservationRequired: claudeItem.reservationRequired ?? false,
     icon: claudeItem.icon || emoji,
-    colorTheme: claudeItem.colorTheme || '#7A6D66',
+    colorTheme: safeColorTheme(claudeItem.colorTheme, claudeItem.category),
     benefit: claudeItem.benefit || '',
     whyGoodIdea: claudeItem.whyGoodIdea || '',
     whatToBring: Array.isArray(claudeItem.whatToBring) ? claudeItem.whatToBring : [],
@@ -181,12 +230,14 @@ function placesToFallback(places, userLat, userLon) {
         ? haversineKm(userLat, userLon, p.lat, p.lon)
         : null;
     const emoji = typeEmoji(p.types);
+    const category = guessCategory(p.types);
+    const subtitle = SUBTITLE_BY_CATEGORY[category] ?? 'Idéal pour une sortie en famille.';
     return {
       id: p.sourceId,
       emoji,
       titre: p.name,
-      description: p.address,
-      subtitle: p.address,
+      description: subtitle,
+      subtitle,
       locationName: p.name,
       address: p.address,
       latitude: p.lat,
@@ -195,25 +246,30 @@ function placesToFallback(places, userLat, userLon) {
       distanceMinutes: km != null ? toDistanceMinutes(km) : 'À vérifier',
       duree: 'À vérifier',
       durationLabel: 'À vérifier',
-      budget: 'À vérifier',
-      priceLabel: 'À vérifier',
+      budget: 'Prix à vérifier',
+      priceLabel: 'Prix à vérifier',
       priceAmount: null,
-      type: 'indoor',
-      minAgeLabel: 'À vérifier',
-      category: 'Loisirs',
+      type: 'outdoor',
+      minAgeLabel: 'Tout âge',
+      category,
       mood: [],
       weatherFit: ['any'],
       reservationRequired: false,
       icon: emoji,
-      colorTheme: '#7A6D66',
-      benefit: 'Un lieu proche à explorer',
-      whyGoodIdea: 'Un endroit à découvrir en famille.',
+      colorTheme: CATEGORY_PASTELS[category] ?? '#F0EAE5',
+      benefit: 'Un lieu proche à découvrir en famille',
+      whyGoodIdea: subtitle,
       whatToBring: [],
       practicalInfos:
         p.isOpen != null
-          ? [p.isOpen ? 'Ouvert maintenant' : 'Fermé actuellement']
-          : ['Vérifier les horaires'],
-      tags: p.types.slice(0, 3),
+          ? [p.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir']
+          : ['Horaires à vérifier avant de partir'],
+      tags: cleanTags(p.types),
+      effortLevel: 'Facile',
+      travelTimeLabel: p.routeDurationSeconds != null ? formatTravelTime(p.routeDurationSeconds) : null,
+      travelDistanceLabel: p.routeDistanceMeters != null ? formatRouteDistance(p.routeDistanceMeters) : null,
+      routeDurationSeconds: p.routeDurationSeconds ?? null,
+      routeDistanceMeters: p.routeDistanceMeters ?? null,
       source: 'google_places',
       sourceId: p.sourceId,
     };
