@@ -46,27 +46,24 @@ function toDistanceMinutes(km) {
 
 // ─── Color & quality helpers ──────────────────────────────────────────────────
 
-const CATEGORY_PASTELS = {
+const ALLOWED_PASTELS = new Set(['#E8F5E9', '#FFF3E0', '#E3F2FD', '#F3E5F5', '#F5F0FF']);
+
+const CATEGORY_PASTEL_MAP = {
   Nature: '#E8F5E9', Culture: '#FFF3E0', Sport: '#E3F2FD',
-  Créatif: '#F3E5F5', Social: '#FFF9E6', Loisirs: '#F5F0FF',
+  Gastronomie: '#FFF3E0', Loisirs: '#F5F0FF', Créatif: '#F3E5F5',
 };
 
-function isColorLight(hex) {
-  if (!hex || typeof hex !== 'string' || !hex.startsWith('#') || hex.length !== 7) return false;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 >= 0.55;
-}
-
 function safeColorTheme(hex, category) {
-  return isColorLight(hex) ? hex : (CATEGORY_PASTELS[category] ?? '#F0EAE5');
+  if (hex && ALLOWED_PASTELS.has(hex)) return hex;
+  return CATEGORY_PASTEL_MAP[category] ?? '#F5F0FF';
 }
 
 function guessCategory(types = []) {
-  if (types.some(t => ['park', 'natural_feature', 'campground', 'rv_park'].includes(t))) return 'Nature';
-  if (types.some(t => ['museum', 'art_gallery', 'library'].includes(t))) return 'Culture';
-  if (types.some(t => ['zoo', 'amusement_park', 'amusement_center'].includes(t))) return 'Loisirs';
+  if (types.some(t => ['park','natural_feature','campground','rv_park','nature_reserve','botanical_garden','hiking_area'].includes(t))) return 'Nature';
+  if (types.some(t => ['museum','art_gallery','library','historic_site','church','hindu_temple','mosque','castle','tourist_attraction'].includes(t))) return 'Culture';
+  if (types.some(t => ['gym','sports_complex','stadium','swimming_pool','bowling_alley','ice_skating_rink'].includes(t))) return 'Sport';
+  if (types.some(t => ['zoo','amusement_park','amusement_center','aquarium'].includes(t))) return 'Loisirs';
+  if (types.some(t => ['restaurant','cafe','bakery'].includes(t))) return 'Gastronomie';
   return 'Loisirs';
 }
 
@@ -79,6 +76,18 @@ const TYPE_LABELS_FR = {
 
 function cleanTags(types = []) {
   return types.map(t => TYPE_LABELS_FR[t]).filter(Boolean).slice(0, 3);
+}
+
+const FORBIDDEN_TAGS = new Set([
+  'tourist_attraction','point_of_interest','establishment','premise',
+  'geocode','locality','political','sublocality','neighborhood',
+  'route','administrative_area_level_1','administrative_area_level_2',
+]);
+
+function filterTags(tags = []) {
+  return tags
+    .filter(t => typeof t === 'string' && !t.includes('_') && !FORBIDDEN_TAGS.has(t) && t.length > 0 && t.length <= 30)
+    .slice(0, 5);
 }
 
 const SUBTITLE_BY_CATEGORY = {
@@ -103,7 +112,7 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
   if (!valid.length) return places;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
+    const timer = setTimeout(() => controller.abort(), 10000);
     const res = await fetch('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
       method: 'POST',
       headers: {
@@ -164,6 +173,78 @@ function typeEmoji(types = []) {
   return '📍';
 }
 
+// ─── Title / emoji / category quality helpers ─────────────────────────────────
+
+const ENGLISH_TITLE_MARKERS = /\b(castle|cathedral|museum|church|garden|tower|palace|bridge|lake|park|forest|abbey|hall|gate|square|market)\b/i;
+
+function correctTitle(claudeTitle, placeName) {
+  if (!claudeTitle) return placeName;
+  if (ENGLISH_TITLE_MARKERS.test(claudeTitle) && placeName &&
+      claudeTitle.trim().toLowerCase() !== placeName.trim().toLowerCase()) {
+    return placeName;
+  }
+  return claudeTitle;
+}
+
+const NAME_EMOJI_PATTERNS = [
+  [/château|castle|fortress|forteresse/i, '🏰'],
+  [/cathédrale|cathedral|église|church|chapelle|abbaye|abbey/i, '⛪'],
+  [/musée|museum/i, '🏛️'],
+  [/zoo|safari/i, '🦁'],
+  [/aquarium/i, '🐠'],
+  [/forêt|forest|bois\b/i, '🌲'],
+  [/lac\b|lake|étang/i, '🌊'],
+  [/jardin|garden|botanical/i, '🌸'],
+  [/parc d['']attract|amusement park/i, '🎡'],
+  [/bibliothèque|library/i, '📚'],
+  [/galerie|gallery/i, '🎨'],
+];
+
+const TYPE_EMOJI_OVERRIDE = {
+  castle: '🏰', church: '⛪', hindu_temple: '⛪', mosque: '⛪', museum: '🏛️',
+  zoo: '🦁', aquarium: '🐠', botanical_garden: '🌸', amusement_park: '🎡',
+  library: '📚', art_gallery: '🎨', natural_feature: '🌿', park: '🌳',
+};
+
+function getEmojiOverride(types = [], name = '') {
+  for (const [pattern, emoji] of NAME_EMOJI_PATTERNS) {
+    if (pattern.test(name)) return emoji;
+  }
+  for (const t of types) if (TYPE_EMOJI_OVERRIDE[t]) return TYPE_EMOJI_OVERRIDE[t];
+  return null;
+}
+
+function determineCategoryOverride(types = [], name = '') {
+  if (
+    types.some(t => ['museum','art_gallery','historic_site','castle','church',
+                     'hindu_temple','mosque','synagogue','library','tourist_attraction'].includes(t)) ||
+    /château|castle|cathédrale|cathedral|musée|museum|abbaye|église|monument/i.test(name)
+  ) return 'Culture';
+  if (types.some(t => ['park','natural_feature','campground','nature_reserve','botanical_garden'].includes(t)))
+    return 'Nature';
+  if (types.some(t => ['zoo','amusement_park','amusement_center','aquarium'].includes(t)))
+    return 'Loisirs';
+  return null;
+}
+
+// ─── Fallback content by category ────────────────────────────────────────────
+
+const WHAT_TO_BRING_DEFAULTS = {
+  Nature:      ['Chaussures confortables', 'Bouteille d\'eau', 'Vêtements adaptés à la météo'],
+  Culture:     ['Curiosité et questions des enfants', 'Appareil photo', 'Monnaie pour les entrées'],
+  Sport:       ['Tenue de sport', 'Bouteille d\'eau', 'Chaussures adaptées'],
+  Gastronomie: ['Appétit', 'Monnaie'],
+  Loisirs:     ['Tenue confortable', 'Bonne humeur', 'Monnaie'],
+};
+
+const PRACTICAL_INFOS_DEFAULTS = {
+  Nature:      ['Horaires à vérifier avant de partir', 'Accès en voiture conseillé'],
+  Culture:     ['Horaires à vérifier avant de partir', 'Tarifs à vérifier sur place'],
+  Sport:       ['Horaires à vérifier avant de partir', 'Réservation parfois nécessaire'],
+  Gastronomie: ['Horaires à vérifier avant de partir', 'Réservation recommandée le week-end'],
+  Loisirs:     ['Horaires à vérifier avant de partir', 'Adapté aux enfants'],
+};
+
 // ─── Merge Claude output with real place data ─────────────────────────────────
 // Any sourceId Claude returns that isn't in placesMap is silently discarded —
 // this enforces the "no hallucinated places" rule at the data level.
@@ -174,19 +255,68 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
     console.warn('[merge] unknown sourceId from Claude:', claudeItem.sourceId, '→ discarded');
     return null;
   }
+
   const km =
     place.lat != null && place.lon != null && userLat != null && userLon != null
       ? haversineKm(userLat, userLon, place.lat, place.lon)
       : null;
 
-  const emoji = claudeItem.emoji || typeEmoji(place.types);
+  // Fix 4: emoji déterministe basé sur le nom/type du lieu
+  const emojiOverride = getEmojiOverride(place.types, place.name);
+  const emoji         = emojiOverride || claudeItem.emoji || typeEmoji(place.types);
+
+  // Fix 2: titre en français (remplace les titres anglais)
+  const titre = correctTitle(claudeItem.titre, place.name);
+
+  // Fix 3: catégorie déterministe (château → Culture, etc.)
+  const category = determineCategoryOverride(place.types, place.name)
+                   || claudeItem.category
+                   || guessCategory(place.types)
+                   || 'Loisirs';
+
+  // Fix 5: couleur restreinte aux 5 pastels exacts
+  const colorTheme = safeColorTheme(claudeItem.colorTheme, category);
+
+  // Fix 6: fallback si Claude retourne whatToBring vide
+  const rawWhatToBring = Array.isArray(claudeItem.whatToBring) ? claudeItem.whatToBring : [];
+  const whatToBring = rawWhatToBring.length > 0
+    ? rawWhatToBring
+    : (WHAT_TO_BRING_DEFAULTS[category] ?? WHAT_TO_BRING_DEFAULTS.Loisirs);
+
+  // Fix 6: fallback si Claude retourne practicalInfos vide
+  const rawPractical = Array.isArray(claudeItem.practicalInfos) ? claudeItem.practicalInfos : [];
+  let practicalInfos;
+  if (rawPractical.length > 0) {
+    practicalInfos = rawPractical;
+  } else if (place.isOpen != null) {
+    practicalInfos = [
+      place.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir',
+      ...(PRACTICAL_INFOS_DEFAULTS[category] ?? []).slice(1),
+    ];
+  } else {
+    practicalInfos = PRACTICAL_INFOS_DEFAULTS[category] ?? ['Horaires à vérifier avant de partir'];
+  }
+
+  // Fix 7: nettoyer les tags techniques Google (snake_case, etc.)
+  const rawTags = Array.isArray(claudeItem.tags) ? claudeItem.tags : [];
+  const tags = filterTags(rawTags).length > 0 ? filterTags(rawTags) : cleanTags(place.types);
+
+  // Fix 1: travelTimeLabel avec fallback haversine si Routes API a échoué
+  const travelTimeLabel = place.routeDurationSeconds != null
+    ? formatTravelTime(place.routeDurationSeconds)
+    : (km != null ? `~${Math.round((km / 50) * 60)} min en voiture` : null);
+
+  const travelDistanceLabel = place.routeDistanceMeters != null
+    ? formatRouteDistance(place.routeDistanceMeters)
+    : (km != null ? `~${km.toFixed(1)} km` : null);
+
   const subtitle = claudeItem.subtitle || '';
 
   return {
     id: place.sourceId,
     emoji,
-    titre: claudeItem.titre || place.name,
-    description: subtitle || claudeItem.whyGoodIdea || place.name, // backward compat with weekend.tsx
+    titre,
+    description: subtitle || claudeItem.whyGoodIdea || place.name,
     subtitle,
     locationName: place.name,
     address: place.address,
@@ -201,24 +331,20 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
     priceAmount: claudeItem.priceAmount ?? null,
     type: claudeItem.type || 'indoor',
     minAgeLabel: claudeItem.minAgeLabel || 'À vérifier',
-    category: claudeItem.category || 'Loisirs',
+    category,
     mood: Array.isArray(claudeItem.mood) ? claudeItem.mood : [],
     weatherFit: Array.isArray(claudeItem.weatherFit) ? claudeItem.weatherFit : ['any'],
     reservationRequired: claudeItem.reservationRequired ?? false,
     icon: claudeItem.icon || emoji,
-    colorTheme: safeColorTheme(claudeItem.colorTheme, claudeItem.category),
+    colorTheme,
     benefit: claudeItem.benefit || '',
     whyGoodIdea: claudeItem.whyGoodIdea || '',
-    whatToBring: Array.isArray(claudeItem.whatToBring) ? claudeItem.whatToBring : [],
-    practicalInfos: Array.isArray(claudeItem.practicalInfos)
-      ? claudeItem.practicalInfos
-      : place.isOpen != null
-        ? [place.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir']
-        : [],
-    tags: Array.isArray(claudeItem.tags) ? claudeItem.tags : [],
+    whatToBring,
+    practicalInfos,
+    tags,
     effortLevel: claudeItem.effortLevel || null,
-    travelTimeLabel: place.routeDurationSeconds != null ? formatTravelTime(place.routeDurationSeconds) : null,
-    travelDistanceLabel: place.routeDistanceMeters != null ? formatRouteDistance(place.routeDistanceMeters) : null,
+    travelTimeLabel,
+    travelDistanceLabel,
     routeDurationSeconds: place.routeDurationSeconds ?? null,
     routeDistanceMeters: place.routeDistanceMeters ?? null,
     source: 'google_places',
@@ -261,7 +387,7 @@ function placesToFallback(places, userLat, userLon) {
       weatherFit: ['any'],
       reservationRequired: false,
       icon: emoji,
-      colorTheme: CATEGORY_PASTELS[category] ?? '#F0EAE5',
+      colorTheme: CATEGORY_PASTEL_MAP[category] ?? '#F5F0FF',
       benefit: 'Un lieu proche à découvrir en famille',
       whyGoodIdea: subtitle,
       whatToBring: [],
