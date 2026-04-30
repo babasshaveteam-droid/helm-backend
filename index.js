@@ -120,7 +120,7 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'routeMatrixElements.duration,routeMatrixElements.distanceMeters',
+        'X-Goog-FieldMask': 'duration,distanceMeters',
       },
       body: JSON.stringify({
         origins: [{ waypoint: { location: { latLng: { latitude: userLat, longitude: userLon } } } }],
@@ -133,7 +133,7 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
     console.log(`[routes] Réponse HTTP: ${res.status}`);
     if (!res.ok) {
       const errBody = await res.text();
-      console.warn('[routes] Routes API erreur:', res.status, errBody.slice(0, 300));
+      console.warn('[routes] Routes API erreur:', res.status, errBody.slice(0, 800));
       return places;
     }
     const elements = await res.json();
