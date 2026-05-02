@@ -215,11 +215,19 @@ function correctTitle(claudeTitle, placeName) {
 }
 
 const NAME_EMOJI_PATTERNS = [
-  [/château|castle|fortress|forteresse/i, '🏰'],
-  [/cathédrale|cathedral|église|church|chapelle|abbaye|abbey/i, '⛪'],
+  [/château|castle|fortress|forteresse|palais\b|palace/i, '🏰'],
+  [/cathédrale|cathedral|église|church|chapelle|abbaye|abbey|basilique|basilica|prieuré/i, '⛪'],
   [/musée|museum/i, '🏛️'],
-  [/zoo|safari/i, '🦁'],
+  [/pont\b|bridge/i, '🌉'],
+  [/belvédère|belveder|viewpoint|panorama|vue\s+sur|sommet|sommet/i, '⛰️'],
+  [/papiliorama|papillon|butterfly/i, '🦋'],
+  [/zoo|safari|ferme\s+animaux|ferme\b.*enf/i, '🦁'],
   [/aquarium/i, '🐠'],
+  [/bowling/i, '🎳'],
+  [/cin[ée]ma|cin[ée]plex/i, '🎬'],
+  [/piscine|swimming/i, '🏊'],
+  [/patinoire|skating/i, '⛸️'],
+  [/boulangerie|pâtisserie|pastry/i, '🥐'],
   [/forêt|forest|bois\b/i, '🌲'],
   [/lac\b|lake|étang/i, '🌊'],
   [/jardin|garden|botanical/i, '🌸'],
@@ -403,7 +411,7 @@ function placesToFallback(places, userLat, userLon) {
       p.lat != null && p.lon != null && userLat != null && userLon != null
         ? haversineKm(userLat, userLon, p.lat, p.lon)
         : null;
-    const emoji = typeEmoji(p.types);
+    const emoji = getEmojiOverride(p.types, p.name) || typeEmoji(p.types);
     const category = guessCategory(p.types);
     const subtitle = SUBTITLE_BY_CATEGORY[category] ?? 'Idéal pour une sortie en famille.';
     return {
@@ -501,7 +509,7 @@ Règles STRICTES :
 12. Ordre de priorité : (1) activités faciles à organiser et proches, (2) culturelles accessibles, (3) nature accessible, (4) aventure en dernier — si aventure, effortLevel="Aventure" obligatoire
 13. Titres en français : utilise le nom français officiel du lieu quand il existe — ex: "Cathédrale Saint-Nicolas" et non "St-Nicolas Cathedral", "Musée d'art et d'histoire" et non "Museum of Art and History". Conserve le nom officiel s'il n'a pas d'équivalent français naturel.
 14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles.
-15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse, 🌲 forêt/réserve/montagne, 🏛️ musée/monument historique, ⛰️ randonnée/sommet, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc, 🎡 UNIQUEMENT pour vrai parc d'attractions. Jamais 🎡 pour un château, un site naturel ou un musée.
+15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse/palais, ⛪ église/chapelle/abbaye/cathédrale/prieuré, 🌉 pont, 🌲 forêt/réserve, 🏛️ musée/monument historique, ⛰️ randonnée/sommet/belvédère, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc urbain, 🎡 UNIQUEMENT pour vrai parc d'attractions, 🦋 papiliorama/papillons, 🎳 bowling, 🎬 cinéma, 🏊 piscine, ⛸️ patinoire, 🥐 boulangerie/pâtisserie. Jamais 🎡 pour château, site naturel ou musée. Jamais 📍 ou 🗺️ pour un lieu culturel ou patrimonial.
 
 Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ) :
 {
