@@ -221,7 +221,7 @@ const NAME_EMOJI_PATTERNS = [
   [/pont\b|bridge/i, '🌉'],
   [/belvédère|belveder|viewpoint|panorama|vue\s+sur|sommet|sommet/i, '⛰️'],
   [/papiliorama|papillon|butterfly/i, '🦋'],
-  [/zoo|safari|ferme\s+animaux|ferme\b.*enf/i, '🦁'],
+  [/zoo|safari|ferme\s*(animaux|animalière?|pédagog|d['']élevage|enfants?)/i, '🦁'],
   [/aquarium/i, '🐠'],
   [/bowling/i, '🎳'],
   [/cin[ée]ma|cin[ée]plex/i, '🎬'],
