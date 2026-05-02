@@ -462,6 +462,70 @@ function placesToFallback(places, userLat, userLon) {
   });
 }
 
+// ─── Final normalization — dernier passage obligatoire avant res.json ─────────
+
+function normalizeInfoText(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/\bpartires?\b/gi, 'partir')
+    .replace(/vérifier les horaires avant la visite/gi, 'Horaires à vérifier avant de partir')
+    .replace(/Actuellement fermé - vérifier horaires?/gi, 'Horaires à vérifier avant de partir')
+    .replace(/Actuellement fermé/gi, 'Horaires à vérifier avant de partir')
+    .replace(/Fermé actuellement/gi, 'Horaires à vérifier avant de partir')
+    .replace(/Parking proche/gi, 'Stationnement à vérifier')
+    .replace(/^À vérifier$/i, 'Horaires à vérifier avant de partir')
+    .trim();
+}
+
+function stripConflictingTravelTime(text) {
+  const stripped = text
+    .replace(/,?\s*(à\s+)?(environ\s+)?~?\d+\s*(h\s*\d*\s*)?min(utes?)?(\s+(en\s+voiture|à\s+pied|de\s+route|de\s+trajet|de\s+bus))?/gi, '')
+    .replace(/,?\s*(à\s+)?(environ\s+)?\d+\s*(heures?|h)\s+(en\s+voiture|à\s+pied|de\s+route|de\s+trajet)/gi, '')
+    .replace(/\s*,\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return stripped.length >= 4 ? stripped : null;
+}
+
+const HORAIRE_NORMALIZE_RE = /horaires?.*vérif|vérif.*horaires?|avant de partir|avant la visite|vérifier avant/i;
+
+function semanticDedupInfos(infos) {
+  let horaireAdded = false;
+  const seen = new Set();
+  const result = [];
+  for (const raw of infos) {
+    const isHoraire = HORAIRE_NORMALIZE_RE.test(raw);
+    const entry = isHoraire ? 'Horaires à vérifier avant de partir' : raw;
+    const key = entry.toLowerCase().trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (isHoraire && horaireAdded) continue;
+    if (isHoraire) horaireAdded = true;
+    result.push(entry);
+  }
+  return result;
+}
+
+function normalizeActivityForDisplay(activity) {
+  if (!activity) return null;
+  let infos = (activity.practicalInfos ?? [])
+    .map(normalizeInfoText)
+    .filter(text => text.length > 0);
+  if (activity.travelTimeLabel) {
+    infos = infos.map(stripConflictingTravelTime).filter(Boolean);
+  }
+  return { ...activity, practicalInfos: semanticDedupInfos(infos) };
+}
+
+function sendActivities(res, activities) {
+  if (res.headersSent) return;
+  res.json(
+    (Array.isArray(activities) ? activities : [activities])
+      .map(normalizeActivityForDisplay)
+      .filter(Boolean)
+  );
+}
+
 // ─── Claude prompt ────────────────────────────────────────────────────────────
 
 function buildClaudePrompt(places, { latitude, longitude, weather, filters, exclude }) {
@@ -508,7 +572,7 @@ Règles STRICTES :
 11. subtitle : expliquer pour quel type de famille c'est adapté, différent du whyGoodIdea — ex: "Idéal pour les familles qui aiment marcher et passer du temps en nature."
 12. Ordre de priorité : (1) activités faciles à organiser et proches, (2) culturelles accessibles, (3) nature accessible, (4) aventure en dernier — si aventure, effortLevel="Aventure" obligatoire
 13. Titres en français : utilise le nom français officiel du lieu quand il existe — ex: "Cathédrale Saint-Nicolas" et non "St-Nicolas Cathedral", "Musée d'art et d'histoire" et non "Museum of Art and History". Conserve le nom officiel s'il n'a pas d'équivalent français naturel.
-14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles.
+14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles. INTERDIT : n'inclure JAMAIS de durée de trajet (ex: "30 min en voiture", "environ 20 min", "~15 min") — cette information est calculée automatiquement par le système.
 15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse/palais, ⛪ église/chapelle/abbaye/cathédrale/prieuré, 🌉 pont, 🌲 forêt/réserve, 🏛️ musée/monument historique, ⛰️ randonnée/sommet/belvédère, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc urbain, 🎡 UNIQUEMENT pour vrai parc d'attractions, 🦋 papiliorama/papillons, 🎳 bowling, 🎬 cinéma, 🏊 piscine, ⛸️ patinoire, 🥐 boulangerie/pâtisserie. Jamais 🎡 pour château, site naturel ou musée. Jamais 📍 ou 🗺️ pour un lieu culturel ou patrimonial.
 
 Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ) :
@@ -565,7 +629,7 @@ app.post('/generer-activites', async (req, res) => {
   // 2. Abort early if Google Places key is missing
   if (!GOOGLE_PLACES_API_KEY) {
     console.warn('[backend] GOOGLE_PLACES_API_KEY absente — fallback mock');
-    return res.json(MOCK_ACTIVITIES);
+    sendActivities(res, MOCK_ACTIVITIES); return;
   }
 
   // Outer scope so the safety timer can fall back to real places if Claude hangs
@@ -576,10 +640,10 @@ app.post('/generer-activites', async (req, res) => {
     if (!res.headersSent) {
       if (candidates?.length) {
         console.warn('[backend] Timeout 25s — fallback lieux Google bruts');
-        res.json(placesToFallback(candidates, latitude, longitude));
+        sendActivities(res, placesToFallback(candidates, latitude, longitude));
       } else {
         console.warn('[backend] Timeout 25s — fallback mock');
-        res.json(MOCK_ACTIVITIES);
+        sendActivities(res, MOCK_ACTIVITIES);
       }
     }
   }, 32000);
@@ -592,14 +656,12 @@ app.post('/generer-activites', async (req, res) => {
       console.log(`[backend] Google Places: ${rawPlaces.length} lieux reçus (group ${searchGroup})`);
     } catch (placesErr) {
       console.error('[backend] Google Places échoue:', placesErr.message, '→ fallback mock');
-      if (!res.headersSent) res.json(MOCK_ACTIVITIES);
-      return;
+      sendActivities(res, MOCK_ACTIVITIES); return;
     }
 
     if (!rawPlaces.length) {
       console.warn('[backend] Google Places: 0 résultats → fallback mock');
-      if (!res.headersSent) res.json(MOCK_ACTIVITIES);
-      return;
+      sendActivities(res, MOCK_ACTIVITIES); return;
     }
 
     // 4. Normalize → deduplicate → filter family-appropriate → exclude already-seen
@@ -685,11 +747,11 @@ app.post('/generer-activites', async (req, res) => {
       enrichedActivities = placesToFallback(candidates, latitude, longitude);
     }
 
-    if (!res.headersSent) res.json(enrichedActivities);
+    sendActivities(res, enrichedActivities);
 
   } catch (e) {
     console.error('[backend] Erreur globale /generer-activites:', e.message);
-    if (!res.headersSent) res.json(MOCK_ACTIVITIES);
+    sendActivities(res, MOCK_ACTIVITIES);
   } finally {
     clearTimeout(safetyTimer);
   }
