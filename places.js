@@ -6,6 +6,15 @@ const SEARCH_GROUPS = [
   ['zoo', 'park', 'tourist_attraction', 'museum', 'art_gallery'],
 ];
 
+// Weather-intent-specific place types — override SEARCH_GROUPS when weatherIntent is set
+const WEATHER_TYPES = {
+  rainy:    ['museum', 'library', 'bowling_alley', 'movie_theater', 'aquarium', 'amusement_center', 'shopping_mall'],
+  cold:     ['museum', 'library', 'movie_theater', 'bowling_alley', 'aquarium', 'cafe'],
+  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo'],
+  unstable: ['museum', 'library', 'cafe', 'bowling_alley', 'shopping_mall', 'park'],
+  sunny:    ['park', 'zoo', 'tourist_attraction', 'botanical_garden', 'amusement_park'],
+};
+
 // Only request the fields we actually use — minimises cost and payload
 const FIELD_MASK = [
   'places.id',
@@ -18,8 +27,10 @@ const FIELD_MASK = [
   'places.currentOpeningHours.openNow',
 ].join(',');
 
-async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0) {
-  const types = SEARCH_GROUPS[searchGroup % SEARCH_GROUPS.length];
+async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0, weatherIntent = null) {
+  const types = (weatherIntent && WEATHER_TYPES[weatherIntent])
+    ? WEATHER_TYPES[weatherIntent]
+    : SEARCH_GROUPS[searchGroup % SEARCH_GROUPS.length];
   const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
     method: 'POST',
     headers: {

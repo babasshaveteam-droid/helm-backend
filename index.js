@@ -385,6 +385,7 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
     category,
     mood: Array.isArray(claudeItem.mood) ? claudeItem.mood : [],
     weatherFit: Array.isArray(claudeItem.weatherFit) ? claudeItem.weatherFit : ['any'],
+    weatherReason: claudeItem.weatherReason || null,
     reservationRequired: claudeItem.reservationRequired ?? false,
     icon: claudeItem.icon || emoji,
     colorTheme,
@@ -436,6 +437,7 @@ function placesToFallback(places, userLat, userLon) {
       category,
       mood: [],
       weatherFit: ['any'],
+      weatherReason: null,
       reservationRequired: false,
       icon: emoji,
       colorTheme: CATEGORY_PASTEL_MAP[category] ?? '#F5F0FF',
@@ -526,9 +528,37 @@ function sendActivities(res, activities) {
   );
 }
 
+// ─── Weather intent ───────────────────────────────────────────────────────────
+
+function getWeatherIntent(weatherCondition, weatherTemp) {
+  const main = (weatherCondition || '').toLowerCase();
+  const temp = typeof weatherTemp === 'number' ? weatherTemp : null;
+  if (['rain', 'drizzle', 'thunderstorm', 'snow'].some(k => main.includes(k))) return 'rainy';
+  if (temp !== null && temp < 8) return 'cold';
+  if (temp !== null && temp > 27) return 'hot';
+  if (main === 'clear' && (temp === null || (temp >= 10 && temp <= 26))) return 'sunny';
+  if (['clouds', 'mist', 'fog', 'haze', 'squall'].some(k => main.includes(k))) return 'unstable';
+  return 'neutral';
+}
+
+// ─── Weather instruction builder ─────────────────────────────────────────────
+
+const WEATHER_INSTRUCTIONS = {
+  rainy:    'La météo est pluvieuse. Priorise les activités couvertes, proches, simples et adaptées aux enfants. Évite les randonnées, parcs et longues sorties extérieures.',
+  sunny:    'La météo est agréable. Priorise les sorties extérieures, nature, animaux et balades faciles. Les activités en plein air sont idéales.',
+  cold:     'Il fait froid. Priorise les activités intérieures, proches, courtes ou avec possibilité de pause au chaud.',
+  hot:      'Il fait chaud. Priorise les lieux frais, ombragés, avec eau ou indoor. Évite les activités physiques longues.',
+  unstable: 'La météo est instable. Priorise les activités flexibles, proches, couvertes ou faciles à écourter.',
+};
+
+function buildWeatherInstruction(weatherIntent) {
+  const instruction = WEATHER_INSTRUCTIONS[weatherIntent];
+  return instruction ? `\n⚠️ Consigne météo : ${instruction}` : '';
+}
+
 // ─── Claude prompt ────────────────────────────────────────────────────────────
 
-function buildClaudePrompt(places, { latitude, longitude, weather, filters, exclude }) {
+function buildClaudePrompt(places, { latitude, longitude, weather, weatherCondition, weatherTemp, weatherIntent, filters, exclude }) {
   const excludeBlock =
     Array.isArray(exclude) && exclude.length > 0
       ? `🚫 LISTE NOIRE — Ne sélectionne JAMAIS ces lieux (ni rien de similaire) :\n${exclude.map(t => `  ❌ "${t}"`).join('\n')}\n\n`
@@ -555,8 +585,9 @@ ${placesJson}
 
 Contexte :
 - Position : lat=${latitude}, lon=${longitude}
-- Météo : ${weather || 'non renseignée'}
+- Météo : ${weatherCondition || weather || 'non renseignée'} / ${weatherTemp != null ? weatherTemp + '°C' : 'temp inconnue'} / intent=${weatherIntent || 'neutral'}
 - Filtres famille : ${Array.isArray(filters) && filters.length ? filters.join(', ') : 'aucun'}
+${buildWeatherInstruction(weatherIntent)}
 
 Règles STRICTES :
 1. Sélectionne 3 à 8 lieux UNIQUEMENT parmi ceux listés ci-dessus
@@ -597,7 +628,8 @@ Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ)
   "effortLevel": "(Facile|Moyen|Aventure)",
   "whatToBring": ["(2 à 4 items pratiques)"],
   "practicalInfos": ["(2 à 3 infos pratiques — si isOpen connu utilise-le, sinon 'Horaires à vérifier avant de partir')"],
-  "tags": ["(3 à 5 tags courts)"]
+  "tags": ["(3 à 5 tags courts)"],
+  "weatherReason": "(phrase courte avec emoji selon la météo — ex: '☀️ Idéal avec ce soleil', '🌧️ À l\'abri s\'il pleut', '🥶 Sortie courte au chaud', '🌿 Parfait pour prendre l\'air', '🌤️ Flexible si la météo change'. Obligatoire.)"
 }`;
 }
 
@@ -610,11 +642,15 @@ app.post('/generer-activites', async (req, res) => {
     exclude = [],
     radiusMeters = 15000,
     weather,
+    weatherCondition,
+    weatherTemp,
     filters,
     searchGroup = 0,
   } = req.body;
 
+  const weatherIntent = getWeatherIntent(weatherCondition, weatherTemp);
   console.log(`[backend] /generer-activites — lat=${latitude} lon=${longitude} radius=${radiusMeters} group=${searchGroup}`);
+  console.log(`[backend] weatherIntent=${weatherIntent} (cond=${weatherCondition ?? 'n/a'}, temp=${weatherTemp ?? 'n/a'}°C)`);
 
   // 1. Validate coordinates
   if (
@@ -652,7 +688,7 @@ app.post('/generer-activites', async (req, res) => {
     // 3. Google Places Nearby Search
     let rawPlaces;
     try {
-      rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup);
+      rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup, weatherIntent);
       console.log(`[backend] Google Places: ${rawPlaces.length} lieux reçus (group ${searchGroup})`);
     } catch (placesErr) {
       console.error('[backend] Google Places échoue:', placesErr.message, '→ fallback mock');
@@ -675,7 +711,7 @@ app.post('/generer-activites', async (req, res) => {
       console.log(`[backend] Seulement ${fresh.length} candidats après exclusion — rayon élargi`);
       try {
         const widerRadius = Math.min(Math.round(radiusMeters * 1.5), 40000);
-        const rawPlaces2 = await fetchNearbyPlaces(latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4);
+        const rawPlaces2 = await fetchNearbyPlaces(latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4, null);
         const fresh2 = deduplicate(rawPlaces2.map(normalizePlace))
           .filter(isFamilyPlace)
           .filter(p => !excludeSet.has(p.sourceId));
@@ -705,7 +741,7 @@ app.post('/generer-activites', async (req, res) => {
     // 5. Claude / OpenRouter
     let enrichedActivities;
     try {
-      const prompt = buildClaudePrompt(candidates, { latitude, longitude, weather, filters, exclude });
+      const prompt = buildClaudePrompt(candidates, { latitude, longitude, weather, weatherCondition, weatherTemp, weatherIntent, filters, exclude });
       console.log(`[backend] envoi Claude avec ${candidates.length} lieux réels`);
 
       const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
