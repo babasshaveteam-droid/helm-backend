@@ -560,6 +560,17 @@ function normalizeActivityForDisplay(activity) {
   return { ...activity, practicalInfos: semanticDedupInfos(infos) };
 }
 
+const GENERIC_TITLES = new Set([
+  'Balade en nature', 'Visite culturelle', 'Pause gourmande', 'Sortie en famille',
+  'Activité en famille', 'Promenade', 'Visite', 'Sortie',
+]);
+
+const HIGH_VALUE_LONG_DISTANCE = new Set([
+  'zoo', 'aquarium', 'museum', 'art_gallery', 'amusement_center', 'amusement_park',
+  'bowling_alley', 'swimming_pool', 'ice_skating_rink', 'library',
+  'historic_site', 'castle', 'botanical_garden', 'tourist_attraction', 'natural_feature',
+]);
+
 function sendActivities(res, activities) {
   if (res.headersSent) return;
   res.json(
@@ -567,6 +578,40 @@ function sendActivities(res, activities) {
       .map(normalizeActivityForDisplay)
       .filter(Boolean)
   );
+}
+
+function validateNearbyActivity(activity) {
+  if (!activity) return false;
+  if (activity.source === 'mock') {
+    console.log('[quality] Rejeté mock source:', activity.title);
+    return false;
+  }
+  if (typeof activity.sourceId === 'string' && activity.sourceId.startsWith('mock-')) {
+    console.log('[quality] Rejeté mock sourceId:', activity.sourceId);
+    return false;
+  }
+  if (GENERIC_TITLES.has(activity.title)) {
+    console.log('[quality] Rejeté titre générique:', activity.title);
+    return false;
+  }
+  const hasCoords = typeof activity.latitude === 'number' && typeof activity.longitude === 'number';
+  const hasAddress = typeof activity.address === 'string' && activity.address.length > 3 && activity.address !== 'À vérifier';
+  if (!hasCoords && !hasAddress) {
+    console.log('[quality] Rejeté sans coords ni adresse:', activity.title);
+    return false;
+  }
+  return true;
+}
+
+function sendNearbyActivities(res, activities) {
+  if (res.headersSent) return;
+  const list = Array.isArray(activities) ? activities : [activities];
+  const validated = list
+    .map(normalizeActivityForDisplay)
+    .filter(Boolean)
+    .filter(validateNearbyActivity);
+  console.log(`[quality] ${validated.length}/${list.length} activités passent la validation`);
+  res.json(validated);
 }
 
 // ─── Weather intent ───────────────────────────────────────────────────────────
@@ -709,8 +754,8 @@ app.post('/generer-activites', async (req, res) => {
 
   // 2. Abort early if Google Places key is missing
   if (!GOOGLE_PLACES_API_KEY) {
-    console.warn('[backend] GOOGLE_PLACES_API_KEY absente — fallback mock');
-    sendActivities(res, MOCK_ACTIVITIES); return;
+    console.warn('[backend] GOOGLE_PLACES_API_KEY absente — réponse vide');
+    if (!res.headersSent) res.json([]); return;
   }
 
   // Outer scope so the safety timer can fall back to real places if Claude hangs
@@ -723,8 +768,8 @@ app.post('/generer-activites', async (req, res) => {
         console.warn('[backend] Timeout 25s — fallback lieux Google bruts');
         sendActivities(res, placesToFallback(candidates, latitude, longitude, weatherIntent));
       } else {
-        console.warn('[backend] Timeout 25s — fallback mock');
-        sendActivities(res, MOCK_ACTIVITIES);
+        console.warn('[backend] Timeout 25s — réponse vide (pas de lieux réels disponibles)');
+        res.json([]);
       }
     }
   }, 32000);
@@ -736,13 +781,13 @@ app.post('/generer-activites', async (req, res) => {
       rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup, weatherIntent);
       console.log(`[backend] Google Places: ${rawPlaces.length} lieux reçus (group ${searchGroup})`);
     } catch (placesErr) {
-      console.error('[backend] Google Places échoue:', placesErr.message, '→ fallback mock');
-      sendActivities(res, MOCK_ACTIVITIES); return;
+      console.error('[backend] Google Places échoue:', placesErr.message, '→ réponse vide');
+      if (!res.headersSent) res.json([]); return;
     }
 
     if (!rawPlaces.length) {
-      console.warn('[backend] Google Places: 0 résultats → fallback mock');
-      sendActivities(res, MOCK_ACTIVITIES); return;
+      console.warn('[backend] Google Places: 0 résultats → réponse vide');
+      if (!res.headersSent) res.json([]); return;
     }
 
     // 4. Normalize → deduplicate → filter family-appropriate → exclude already-seen
@@ -773,11 +818,6 @@ app.post('/generer-activites', async (req, res) => {
     let fresh = excludeSet.size > 0 ? deduped.filter(p => !excludeSet.has(p.sourceId)) : deduped;
 
     // 4b. Filtre qualité à longue distance — éviter cafés/parcs génériques loin
-    const HIGH_VALUE_LONG_DISTANCE = new Set([
-      'zoo', 'aquarium', 'museum', 'art_gallery', 'amusement_center', 'amusement_park',
-      'bowling_alley', 'swimming_pool', 'ice_skating_rink', 'library',
-      'historic_site', 'castle', 'botanical_garden', 'tourist_attraction', 'natural_feature',
-    ]);
     if (radiusMeters > 40000 && fresh.length >= 3) {
       const highValue = fresh.filter(p => p.types.some(t => HIGH_VALUE_LONG_DISTANCE.has(t)));
       if (highValue.length >= 3) {
@@ -792,9 +832,13 @@ app.post('/generer-activites', async (req, res) => {
       try {
         const widerRadius = Math.min(Math.round(radiusMeters * 1.5), 80000);
         const rawPlaces2 = await fetchNearbyPlaces(latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4, null);
-        const fresh2 = deduplicate(rawPlaces2.map(normalizePlace))
+        let fresh2 = deduplicate(rawPlaces2.map(normalizePlace))
           .filter(isFamilyPlace)
           .filter(p => !excludeSet.has(p.sourceId));
+        if (widerRadius > 40000 && fresh2.length >= 3) {
+          const hv2 = fresh2.filter(p => p.types.some(t => HIGH_VALUE_LONG_DISTANCE.has(t)));
+          if (hv2.length >= 3) fresh2 = hv2;
+        }
         if (fresh2.length > fresh.length) {
           fresh = fresh2;
           console.log(`[backend] Rayon élargi (${widerRadius}m): ${fresh.length} nouveaux candidats`);
@@ -863,11 +907,17 @@ app.post('/generer-activites', async (req, res) => {
       enrichedActivities = placesToFallback(candidates, latitude, longitude, weatherIntent);
     }
 
-    sendActivities(res, enrichedActivities);
+    sendNearbyActivities(res, enrichedActivities);
 
   } catch (e) {
     console.error('[backend] Erreur globale /generer-activites:', e.message);
-    sendActivities(res, MOCK_ACTIVITIES);
+    if (!res.headersSent) {
+      if (candidates?.length) {
+        sendNearbyActivities(res, placesToFallback(candidates, latitude, longitude, weatherIntent));
+      } else {
+        res.json([]);
+      }
+    }
   } finally {
     clearTimeout(safetyTimer);
   }
