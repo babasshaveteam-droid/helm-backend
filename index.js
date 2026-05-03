@@ -169,17 +169,18 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
 
 const TYPE_EMOJI = {
   park: '🌳', museum: '🏛️', library: '📚',
-  tourist_attraction: '📍', cafe: '☕',
+  tourist_attraction: '🗺️', cafe: '☕',
   amusement_park: '🎡', amusement_center: '🎮',
   swimming_pool: '🏊', castle: '🏰',
   historic_site: '🏛️', natural_feature: '🌿',
   nature_reserve: '🦋', zoo: '🦁',
   aquarium: '🐠', botanical_garden: '🌸',
+  shopping_mall: '🏬', beach: '🏖️',
 };
 
 function typeEmoji(types = []) {
   for (const t of types) if (TYPE_EMOJI[t]) return TYPE_EMOJI[t];
-  return '📍';
+  return '✨';
 }
 
 // ─── Heritage / religious site helpers ───────────────────────────────────────
@@ -230,6 +231,7 @@ const NAME_EMOJI_PATTERNS = [
   [/patinoire|skating/i, '⛸️'],
   [/boulangerie|pâtisserie|pastry/i, '🥐'],
   [/forêt|forest|bois\b/i, '🌲'],
+  [/plage|beach|baignade/i, '🏖️'],
   [/lac\b|lake|étang/i, '🌊'],
   [/jardin|garden|botanical/i, '🌸'],
   [/parc d['']attract|amusement park/i, '🎡'],
@@ -241,6 +243,7 @@ const TYPE_EMOJI_OVERRIDE = {
   castle: '🏰', church: '⛪', hindu_temple: '⛪', mosque: '⛪', museum: '🏛️',
   zoo: '🦁', aquarium: '🐠', botanical_garden: '🌸', amusement_park: '🎡',
   library: '📚', art_gallery: '🎨', natural_feature: '🌿', park: '🌳',
+  shopping_mall: '🏬', beach: '🏖️',
 };
 
 function getEmojiOverride(types = [], name = '') {
@@ -288,7 +291,7 @@ const PRACTICAL_INFOS_DEFAULTS = {
 // Any sourceId Claude returns that isn't in placesMap is silently discarded —
 // this enforces the "no hallucinated places" rule at the data level.
 
-function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
+function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon, weatherIntent) {
   const place = placesMap.get(claudeItem.sourceId);
   if (!place) {
     console.warn('[merge] unknown sourceId from Claude:', claudeItem.sourceId, '→ discarded');
@@ -387,6 +390,7 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
     mood: Array.isArray(claudeItem.mood) ? claudeItem.mood : [],
     weatherFit: Array.isArray(claudeItem.weatherFit) ? claudeItem.weatherFit : ['any'],
     weatherReason: claudeItem.weatherReason || null,
+    weatherIntent: weatherIntent || null,
     reservationRequired: claudeItem.reservationRequired ?? false,
     icon: claudeItem.icon || emoji,
     colorTheme,
@@ -407,7 +411,7 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon) {
 
 // ─── Fallback: Google places → minimal Activity (Claude unavailable) ───────────
 
-function placesToFallback(places, userLat, userLon) {
+function placesToFallback(places, userLat, userLon, weatherIntent) {
   return places.slice(0, 6).map(p => {
     const km =
       p.lat != null && p.lon != null && userLat != null && userLon != null
@@ -440,6 +444,7 @@ function placesToFallback(places, userLat, userLon) {
       mood: [],
       weatherFit: ['any'],
       weatherReason: null,
+      weatherIntent: weatherIntent || null,
       reservationRequired: false,
       icon: emoji,
       colorTheme: CATEGORY_PASTEL_MAP[category] ?? '#F5F0FF',
@@ -678,7 +683,7 @@ app.post('/generer-activites', async (req, res) => {
     if (!res.headersSent) {
       if (candidates?.length) {
         console.warn('[backend] Timeout 25s — fallback lieux Google bruts');
-        sendActivities(res, placesToFallback(candidates, latitude, longitude));
+        sendActivities(res, placesToFallback(candidates, latitude, longitude, weatherIntent));
       } else {
         console.warn('[backend] Timeout 25s — fallback mock');
         sendActivities(res, MOCK_ACTIVITIES);
@@ -773,7 +778,7 @@ app.post('/generer-activites', async (req, res) => {
 
       // 6. Merge: discard any item whose sourceId is not in placesMap (hallucination guard)
       enrichedActivities = claudeItems
-        .map(item => mergeWithPlaceData(item, placesMap, latitude, longitude))
+        .map(item => mergeWithPlaceData(item, placesMap, latitude, longitude, weatherIntent))
         .filter(Boolean);
 
       if (!enrichedActivities.length) throw new Error('Aucune activité valide après merge');
@@ -782,7 +787,7 @@ app.post('/generer-activites', async (req, res) => {
     } catch (claudeErr) {
       // Claude failed but we have real Places data → serve normalized Google places
       console.error('[backend] Claude échoue:', claudeErr.message, '→ fallback lieux Google bruts');
-      enrichedActivities = placesToFallback(candidates, latitude, longitude);
+      enrichedActivities = placesToFallback(candidates, latitude, longitude, weatherIntent);
     }
 
     sendActivities(res, enrichedActivities);
