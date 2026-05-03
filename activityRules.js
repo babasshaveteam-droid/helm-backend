@@ -53,6 +53,30 @@ const GLOBAL_FORBIDDEN_TAGS = new Set([
 
 const FAMILIES = {
 
+  kids_play: {
+    // Centre de loisirs / aire de jeux indoor — doit passer AVANT bowling
+    // pour éviter qu'un amusement_center avec bowling_alley secondaire → faux bowling
+    detect: (name, types) =>
+      (types.includes('amusement_center') ||
+       /payerneland|laurapark|laura\s*park|indoor\s*play(?:ground)?|aire\s+de\s+jeux/i.test(name)) &&
+      !types.includes('bowling_alley') &&
+      !/bowling|quilles/i.test(name),
+    category:    'Loisirs',
+    type:        'indoor',
+    icon:        '🛝',
+    effortLevel: 'Facile',
+    weatherFit:  ['rainy', 'cold', 'unstable'],
+    subtitle:    "Un centre de loisirs pour que les enfants jouent et se dépensent à l'abri.",
+    whyGoodIdea: "Les enfants peuvent profiter de jeux, toboggans et petites attractions dans un cadre adapté.",
+    benefit:     "Jeux et défoulement à l'abri",
+    whatToBring: ['Chaussettes', 'Eau', 'Petite veste'],
+    practicalInfos: ['Jeux et structures adaptés aux enfants', 'Réservation à vérifier'],
+    tags:        ['jeux', 'enfants', 'intérieur', 'loisirs', 'amusement', 'famille'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [/réservation recommandée le week-end/i],
+    forbiddenTags: ["parc d'attractions", 'lieu à découvrir'],
+  },
+
   bowling: {
     detect: (name, types) =>
       types.includes('bowling_alley') || /bowling|quilles/i.test(name),

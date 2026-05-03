@@ -173,7 +173,7 @@ async function fetchTravelTimes(userLat, userLon, places, apiKey) {
 const TYPE_EMOJI = {
   park: '🌳', museum: '🏛️', library: '📚',
   tourist_attraction: '🗺️', cafe: '☕',
-  amusement_park: '🎡', amusement_center: '🎮',
+  amusement_park: '🎡', amusement_center: '🛝',
   swimming_pool: '🏊', castle: '🏰',
   historic_site: '🏛️', natural_feature: '🌿',
   nature_reserve: '🦋', zoo: '🦁',
@@ -243,6 +243,7 @@ const NAME_EMOJI_PATTERNS = [
   [/papiliorama|papillon|butterfly/i, '🦋'],
   [/zoo|safari|ferme\s*(animaux|animalière?|pédagog|d['']élevage|enfants?)/i, '🦁'],
   [/aquarium/i, '🐠'],
+  [/payerneland|laurapark|laura\s*park|indoor\s*play(?:ground)?|aire\s+de\s+jeux\b/i, '🛝'],
   [/bowling/i, '🎳'],
   [/cin[ée]ma|cin[ée]plex/i, '🎬'],
   [/piscine|swimming/i, '🏊'],
@@ -260,7 +261,7 @@ const NAME_EMOJI_PATTERNS = [
 
 const TYPE_EMOJI_OVERRIDE = {
   castle: '🏰', church: '⛪', hindu_temple: '⛪', mosque: '⛪', museum: '🏛️',
-  zoo: '🦁', aquarium: '🐠', botanical_garden: '🌸', amusement_park: '🎡',
+  zoo: '🦁', aquarium: '🐠', botanical_garden: '🌸', amusement_park: '🎡', amusement_center: '🛝',
   library: '📚', art_gallery: '🎨', natural_feature: '🌿', park: '🌳',
   shopping_mall: '🏬', beach: '🏖️',
 };
@@ -628,7 +629,7 @@ Règles STRICTES :
 12. Ordre de priorité : (1) activités faciles à organiser et proches, (2) culturelles accessibles, (3) nature accessible, (4) aventure en dernier — si aventure, effortLevel="Aventure" obligatoire
 13. Titres en français : utilise le nom français officiel du lieu quand il existe — ex: "Cathédrale Saint-Nicolas" et non "St-Nicolas Cathedral", "Musée d'art et d'histoire" et non "Museum of Art and History". Conserve le nom officiel s'il n'a pas d'équivalent français naturel.
 14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles. INTERDIT : n'inclure JAMAIS de durée de trajet (ex: "30 min en voiture", "environ 20 min", "~15 min") — cette information est calculée automatiquement par le système.
-15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse/palais, ⛪ église/chapelle/abbaye/cathédrale/prieuré, 🌉 pont, 🌲 forêt/réserve, 🏛️ musée/monument historique, ⛰️ randonnée/sommet/belvédère, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc urbain, 🎡 UNIQUEMENT pour vrai parc d'attractions, 🦋 papiliorama/papillons, 🎳 bowling, 🎬 cinéma, 🏊 piscine, ⛸️ patinoire, 🥐 boulangerie/pâtisserie, 🏬 centre commercial, 🏖️ plage. Jamais 🎡 pour château, site naturel ou musée. Jamais 📍 ou 🗺️ pour un lieu culturel ou patrimonial.
+15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse/palais, ⛪ église/chapelle/abbaye/cathédrale/prieuré, 🌉 pont, 🌲 forêt/réserve, 🏛️ musée/monument historique, ⛰️ randonnée/sommet/belvédère, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc urbain, 🎡 UNIQUEMENT pour vrai parc d'attractions extérieur, 🛝 centre de loisirs enfants / aire de jeux / amusement center indoor, 🦋 papiliorama/papillons, 🎳 bowling (UNIQUEMENT si le lieu est explicitement un bowling), 🎬 cinéma, 🏊 piscine, ⛸️ patinoire, 🥐 boulangerie/pâtisserie, 🏬 centre commercial, 🏖️ plage. Jamais 🎳 pour un centre de loisirs, parc de jeux ou amusement center. Jamais 🎡 pour château, site naturel ou musée. Jamais 📍 ou 🗺️ pour un lieu culturel ou patrimonial.
 16. whatToBring : JAMAIS "Bonne humeur", "Appétit", "Monnaie" (seul), "Tenue confortable". Utilise : "Porte-monnaie", "Petite faim", "Eau", "Petite veste", "Chaussettes".
 17. type : bowling/café/boulangerie/pâtisserie/centre commercial → "indoor" OBLIGATOIRE. Plage/lac/parc → "outdoor".
 18. practicalInfos : N'INVENTE JAMAIS "Réservation recommandée le week-end" ou "Parking gratuit" sans source explicite dans les données.
