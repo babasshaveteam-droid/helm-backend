@@ -116,7 +116,7 @@ const FAMILIES = {
     detect: (name, types) =>
       types.some(t => ['bakery', 'cafe'].includes(t)) ||
       /boulangerie|pâtisserie|pastry|tea\s*room|coffee\s*shop/i.test(name),
-    category:    'Gastronomie',
+    category:    'Pause famille',
     type:        'indoor',
     icon:        null, // 🥐 (boulangerie) or ☕ (café) determined by getEmojiOverride
     effortLevel: 'Facile',
@@ -342,13 +342,19 @@ function applyFamilyRules(activity, placeName = '', placeTypes = [], opts = {}) 
 
   if (!rule) return a;
 
-  // ── 4. Always override: type, weatherFit ────────────────────────────────────
+  // ── 4. Always override: type, weatherFit, category ─────────────────────────
   if (rule.type !== null) a.type = rule.type;
   if (rule.weatherFit !== null && (fromFallback || !a.weatherFit?.length)) {
     a.weatherFit = rule.weatherFit;
   }
-  // Sync icon field for chip (Intérieur / Extérieur)
-  // (chips are built in frontend from activity.type — no action needed here)
+  if (rule.category !== null && a.category !== rule.category) {
+    a.category = rule.category;
+    const PASTEL = {
+      Nature: '#E8F5E9', Culture: '#FFF3E0', Sport: '#E3F2FD',
+      Gastronomie: '#FFF3E0', Loisirs: '#F5F0FF', 'Pause famille': '#FFF3E0',
+    };
+    a.colorTheme = PASTEL[a.category] ?? a.colorTheme;
+  }
 
   // ── 5. fromFallback-only: override text content + emoji ─────────────────────
   if (fromFallback) {

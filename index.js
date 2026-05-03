@@ -52,6 +52,7 @@ const ALLOWED_PASTELS = new Set(['#E8F5E9', '#FFF3E0', '#E3F2FD', '#F3E5F5', '#F
 const CATEGORY_PASTEL_MAP = {
   Nature: '#E8F5E9', Culture: '#FFF3E0', Sport: '#E3F2FD',
   Gastronomie: '#FFF3E0', Loisirs: '#F5F0FF', Créatif: '#F3E5F5',
+  'Pause famille': '#FFF3E0',
 };
 
 function safeColorTheme(hex, category) {
@@ -93,9 +94,10 @@ function filterTags(tags = []) {
 }
 
 const SUBTITLE_BY_CATEGORY = {
-  Nature:  'Idéal pour prendre l\'air en famille et profiter d\'un moment dehors.',
-  Culture: 'Idéal pour une sortie calme et éducative avec des enfants curieux.',
-  Loisirs: 'Idéal pour une sortie simple et amusante avec les enfants.',
+  Nature:         "Idéal pour prendre l'air en famille et profiter d'un moment dehors.",
+  Culture:        'Idéal pour une sortie calme et éducative avec des enfants curieux.',
+  Loisirs:        'Idéal pour une sortie simple et amusante avec les enfants.',
+  'Pause famille': "Une pause gourmande simple à partager avec les enfants.",
 };
 
 function formatTravelTime(seconds) {
@@ -291,19 +293,21 @@ function determineCategoryOverride(types = [], name = '') {
 const HERITAGE_WHAT_TO_BRING = ['Appareil photo', 'Eau', 'Chaussures confortables', 'Petite veste'];
 
 const WHAT_TO_BRING_DEFAULTS = {
-  Nature:      ['Chaussures confortables', "Bouteille d'eau", 'Vêtements adaptés à la météo'],
-  Culture:     ['Appareil photo', 'Eau', 'Porte-monnaie'],
-  Sport:       ['Tenue de sport', "Bouteille d'eau", 'Chaussures adaptées'],
-  Gastronomie: ['Porte-monnaie', 'Petite faim'],
-  Loisirs:     ['Eau', 'Petite veste', 'Porte-monnaie'],
+  Nature:         ['Chaussures confortables', "Bouteille d'eau", 'Vêtements adaptés à la météo'],
+  Culture:        ['Appareil photo', 'Eau', 'Porte-monnaie'],
+  Sport:          ['Tenue de sport', "Bouteille d'eau", 'Chaussures adaptées'],
+  Gastronomie:    ['Porte-monnaie', 'Petite faim'],
+  Loisirs:        ['Eau', 'Petite veste', 'Porte-monnaie'],
+  'Pause famille': ['Porte-monnaie', 'Petite faim'],
 };
 
 const PRACTICAL_INFOS_DEFAULTS = {
-  Nature:      ['Horaires à vérifier avant de partir', 'Accès en voiture conseillé'],
-  Culture:     ['Horaires à vérifier avant de partir', 'Adresse disponible dans l\'itinéraire', 'Prix à vérifier'],
-  Sport:       ['Horaires à vérifier avant de partir', 'Réservation parfois nécessaire'],
-  Gastronomie: ["Horaires à vérifier avant de partir", 'Prix à vérifier'],
-  Loisirs:     ['Horaires à vérifier avant de partir', 'Adapté aux enfants'],
+  Nature:         ['Horaires à vérifier avant de partir', 'Accès en voiture conseillé'],
+  Culture:        ['Horaires à vérifier avant de partir', "Adresse disponible dans l'itinéraire", 'Prix à vérifier'],
+  Sport:          ['Horaires à vérifier avant de partir', 'Réservation parfois nécessaire'],
+  Gastronomie:    ['Horaires à vérifier avant de partir', 'Prix à vérifier'],
+  Loisirs:        ['Horaires à vérifier avant de partir', 'Adapté aux enfants'],
+  'Pause famille': ['Horaires à vérifier avant de partir', 'Prix à vérifier'],
 };
 
 
