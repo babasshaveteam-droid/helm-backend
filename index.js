@@ -59,8 +59,9 @@ function safeColorTheme(hex, category) {
 }
 
 function guessCategory(types = []) {
-  if (types.some(t => ['park','natural_feature','campground','rv_park','nature_reserve','botanical_garden','hiking_area'].includes(t))) return 'Nature';
+  // Culture avant Nature — museum/art_gallery doit gagner sur natural_feature (ex: Laténium)
   if (types.some(t => ['museum','art_gallery','library','historic_site','church','hindu_temple','mosque','castle','tourist_attraction'].includes(t))) return 'Culture';
+  if (types.some(t => ['park','natural_feature','campground','rv_park','nature_reserve','botanical_garden','hiking_area'].includes(t))) return 'Nature';
   if (types.some(t => ['gym','sports_complex','stadium','swimming_pool','bowling_alley','ice_skating_rink'].includes(t))) return 'Sport';
   if (types.some(t => ['zoo','amusement_park','amusement_center','aquarium'].includes(t))) return 'Loisirs';
   if (types.some(t => ['restaurant','cafe','bakery'].includes(t))) return 'Gastronomie';
@@ -184,8 +185,8 @@ function typeEmoji(types = []) {
 // ─── Heritage / religious site helpers ───────────────────────────────────────
 
 function isHeritageSite(name = '', types = []) {
-  return /abbaye|abbey|monastère|monastery|cathédrale|cathedral|église|church|chapelle|chapel|basilique|basilica|monument|prieuré|priory/i.test(name) ||
-    types.some(t => ['historic_site','church','hindu_temple','mosque','synagogue','castle'].includes(t));
+  return /abbaye|abbey|monastère|monastery|cathédrale|cathedral|église|church|chapelle|chapel|basilique|basilica|monument|prieuré|priory|mus[eé]e|museum|arch[eé]olog|patrimoine/i.test(name) ||
+    types.some(t => ['historic_site','church','hindu_temple','mosque','synagogue','castle','museum'].includes(t));
 }
 
 function getHeritageTags(name = '') {
@@ -254,7 +255,7 @@ function determineCategoryOverride(types = [], name = '') {
   if (
     types.some(t => ['museum','art_gallery','historic_site','castle','church',
                      'hindu_temple','mosque','synagogue','library','tourist_attraction'].includes(t)) ||
-    /château|castle|cathédrale|cathedral|musée|museum|abbaye|église|monument/i.test(name)
+    /château|castle|cathédrale|cathedral|mus[eé]e|museum|abbaye|église|monument|arch[eé]olog|patrimoine/i.test(name)
   ) return 'Culture';
   if (types.some(t => ['park','natural_feature','campground','nature_reserve','botanical_garden'].includes(t)))
     return 'Nature';
@@ -413,7 +414,8 @@ function placesToFallback(places, userLat, userLon) {
         ? haversineKm(userLat, userLon, p.lat, p.lon)
         : null;
     const emoji = getEmojiOverride(p.types, p.name) || typeEmoji(p.types);
-    const category = guessCategory(p.types);
+    const category = determineCategoryOverride(p.types, p.name) || guessCategory(p.types);
+    const heritage = isHeritageSite(p.name, p.types);
     const subtitle = SUBTITLE_BY_CATEGORY[category] ?? 'Idéal pour une sortie en famille.';
     return {
       id: p.sourceId,
@@ -443,12 +445,12 @@ function placesToFallback(places, userLat, userLon) {
       colorTheme: CATEGORY_PASTEL_MAP[category] ?? '#F5F0FF',
       benefit: 'Un lieu proche à découvrir en famille',
       whyGoodIdea: subtitle,
-      whatToBring: [],
-      practicalInfos:
-        p.isOpen != null
-          ? [p.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir']
-          : ['Horaires à vérifier avant de partir'],
-      tags: cleanTags(p.types),
+      whatToBring: heritage ? HERITAGE_WHAT_TO_BRING : (WHAT_TO_BRING_DEFAULTS[category] ?? []),
+      practicalInfos: [
+        ...(p.isOpen != null ? [p.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir'] : ['Horaires à vérifier avant de partir']),
+        ...(PRACTICAL_INFOS_DEFAULTS[category] ?? []).slice(1),
+      ],
+      tags: heritage ? getHeritageTags(p.name) : cleanTags(p.types),
       effortLevel: 'Facile',
       travelTimeLabel: p.routeDurationSeconds != null
         ? formatTravelTime(p.routeDurationSeconds)

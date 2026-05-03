@@ -42,9 +42,27 @@ function deduplicate(places) {
 
 const FAST_FOOD_BLACKLIST = ['mcdonald', 'kfc', 'quick', 'burger king', 'subway', 'kebab', 'pizza hut', 'domino'];
 
+const BLOCKED_TYPES = new Set([
+  'pharmacy', 'drugstore', 'hospital', 'doctor', 'dentist', 'physiotherapist',
+  'veterinary_care', 'health',
+  'bank', 'atm', 'insurance_agency', 'accounting', 'finance', 'real_estate_agency',
+  'lawyer', 'local_government_office', 'city_hall', 'post_office', 'police', 'fire_station',
+  'gas_station', 'car_repair', 'car_dealer', 'car_wash', 'parking',
+  'transit_station', 'bus_station', 'train_station', 'subway_station', 'taxi_stand', 'airport',
+  'grocery_store', 'supermarket', 'convenience_store',
+  'locality', 'neighborhood', 'sublocality', 'political',
+  'administrative_area_level_1', 'administrative_area_level_2', 'administrative_area_level_3',
+  'route', 'street_address', 'postal_code', 'premise', 'subpremise',
+]);
+
+const BLOCKED_NAME_PATTERNS = /\b(pharmacie|pharmacy|apotheke|banque|dentiste|cabinet\s+m[eé]dical|clinique|h[oô]pital|hospital|centre\s+m[eé]dical|gare\b|assurance|mairie|commune)\b/i;
+
 function isFamilyPlace(place) {
-  const n = place.name.toLowerCase();
-  return !FAST_FOOD_BLACKLIST.some(f => n.includes(f));
+  const types = Array.isArray(place.types) ? place.types : [];
+  if (FAST_FOOD_BLACKLIST.some(f => place.name.toLowerCase().includes(f))) return false;
+  if (types.some(t => BLOCKED_TYPES.has(t))) return false;
+  if (BLOCKED_NAME_PATTERNS.test(place.name)) return false;
+  return true;
 }
 
 module.exports = { normalizePlace, deduplicate, normalizeKey, isFamilyPlace };
