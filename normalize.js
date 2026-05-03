@@ -57,11 +57,20 @@ const BLOCKED_TYPES = new Set([
 
 const BLOCKED_NAME_PATTERNS = /\b(pharmacie|pharmacy|apotheke|banque|dentiste|cabinet\s+m[eé]dical|clinique|h[oô]pital|hospital|centre\s+m[eé]dical|gare\b|assurance|mairie|commune)\b/i;
 
+// Specific activity types that justify keeping a "Centre" place
+const VALID_CENTRE_TYPES = new Set([
+  'shopping_mall','gym','sports_complex','amusement_center','museum','art_gallery',
+  'bowling_alley','swimming_pool','ice_skating_rink','movie_theater','aquarium',
+]);
+
 function isFamilyPlace(place) {
   const types = Array.isArray(place.types) ? place.types : [];
   if (FAST_FOOD_BLACKLIST.some(f => place.name.toLowerCase().includes(f))) return false;
   if (types.some(t => BLOCKED_TYPES.has(t))) return false;
   if (BLOCKED_NAME_PATTERNS.test(place.name)) return false;
+  // Block bare "XXX Centre / Center" names (city centres, generic locations)
+  // unless Google confirms a real activity type (shopping_mall, gym, etc.)
+  if (/\s+cent(re|er)\s*$/i.test(place.name) && !types.some(t => VALID_CENTRE_TYPES.has(t))) return false;
   return true;
 }
 
