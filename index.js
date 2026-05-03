@@ -629,7 +629,7 @@ Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ)
   "whatToBring": ["(2 à 4 items pratiques)"],
   "practicalInfos": ["(2 à 3 infos pratiques — si isOpen connu utilise-le, sinon 'Horaires à vérifier avant de partir')"],
   "tags": ["(3 à 5 tags courts)"],
-  "weatherReason": "(phrase courte avec emoji selon la météo — ex: '☀️ Idéal avec ce soleil', '🌧️ À l\'abri s\'il pleut', '🥶 Sortie courte au chaud', '🌿 Parfait pour prendre l\'air', '🌤️ Flexible si la météo change'. Obligatoire.)"
+  "weatherReason": "(phrase TRÈS courte avec emoji — MAXIMUM 32 caractères — ex: '☀️ Idéal avec ce soleil', '🌧️ À l\'abri', '🥶 Sortie courte', '🌿 Prendre l\'air', '🌤️ Flexible aujourd\'hui', '❄️ Au frais'. Obligatoire.)"
 }`;
 }
 
