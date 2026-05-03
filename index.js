@@ -47,12 +47,12 @@ function toDistanceMinutes(km) {
 
 // ─── Color & quality helpers ──────────────────────────────────────────────────
 
-const ALLOWED_PASTELS = new Set(['#E8F5E9', '#FFF3E0', '#E3F2FD', '#F3E5F5', '#F5F0FF']);
+const ALLOWED_PASTELS = new Set(['#E8F5E9', '#FFF3E0', '#E3F2FD', '#F3E5F5', '#F5F0FF', '#FFF8E1']);
 
 const CATEGORY_PASTEL_MAP = {
   Nature: '#E8F5E9', Culture: '#FFF3E0', Sport: '#E3F2FD',
   Gastronomie: '#FFF3E0', Loisirs: '#F5F0FF', Créatif: '#F3E5F5',
-  'Pause famille': '#FFF3E0',
+  'Pause famille': '#FFF3E0', Animaux: '#FFF8E1', Calme: '#F3E5F5',
 };
 
 function safeColorTheme(hex, category) {
@@ -61,11 +61,13 @@ function safeColorTheme(hex, category) {
 }
 
 function guessCategory(types = []) {
+  if (types.includes('aquarium') || types.includes('zoo')) return 'Animaux';
+  if (types.includes('library')) return 'Calme';
   // Culture avant Nature — museum/art_gallery doit gagner sur natural_feature (ex: Laténium)
-  if (types.some(t => ['museum','art_gallery','library','historic_site','church','hindu_temple','mosque','castle','tourist_attraction'].includes(t))) return 'Culture';
+  if (types.some(t => ['museum','art_gallery','historic_site','church','hindu_temple','mosque','castle','tourist_attraction'].includes(t))) return 'Culture';
   if (types.some(t => ['park','natural_feature','campground','rv_park','nature_reserve','botanical_garden','hiking_area'].includes(t))) return 'Nature';
   if (types.some(t => ['gym','sports_complex','stadium','swimming_pool','bowling_alley','ice_skating_rink'].includes(t))) return 'Sport';
-  if (types.some(t => ['zoo','amusement_park','amusement_center','aquarium'].includes(t))) return 'Loisirs';
+  if (types.some(t => ['amusement_park','amusement_center'].includes(t))) return 'Loisirs';
   if (types.some(t => ['restaurant','cafe','bakery'].includes(t))) return 'Gastronomie';
   return 'Loisirs';
 }
@@ -98,6 +100,8 @@ const SUBTITLE_BY_CATEGORY = {
   Culture:        'Idéal pour une sortie calme et éducative avec des enfants curieux.',
   Loisirs:        'Idéal pour une sortie simple et amusante avec les enfants.',
   'Pause famille': "Une pause gourmande simple à partager avec les enfants.",
+  Animaux:        "Une découverte du monde animal pour petits et grands.",
+  Calme:          "Un endroit calme pour lire, jouer ou découvrir ensemble.",
 };
 
 function formatTravelTime(seconds) {
@@ -174,7 +178,7 @@ const TYPE_EMOJI = {
   park: '🌳', museum: '🏛️', library: '📚',
   tourist_attraction: '🗺️', cafe: '☕',
   amusement_park: '🎡', amusement_center: '🛝',
-  swimming_pool: '🏊', castle: '🏰',
+  swimming_pool: '🏊', ice_skating_rink: '⛸️', castle: '🏰',
   historic_site: '🏛️', natural_feature: '🌿',
   nature_reserve: '🦋', zoo: '🦁',
   aquarium: '🐠', botanical_garden: '🌸',
@@ -247,7 +251,10 @@ const NAME_EMOJI_PATTERNS = [
   [/bowling/i, '🎳'],
   [/cin[ée]ma|cin[ée]plex/i, '🎬'],
   [/piscine|swimming/i, '🏊'],
-  [/patinoire|skating/i, '⛸️'],
+  [/patinoire|ice\s*skat/i, '⛸️'],
+  [/escalade|climbing\s*(gym|wall|center)|bloc\b/i, '🧗'],
+  [/mini.golf|minigolf/i, '⛳'],
+  [/skatepark|pumptrack/i, '🛹'],
   [/boulangerie|pâtisserie|pastry/i, '🥐'],
   [/forêt|forest|bois\b/i, '🌲'],
   [/plage|beach|baignade/i, '🏖️'],
@@ -263,7 +270,7 @@ const TYPE_EMOJI_OVERRIDE = {
   castle: '🏰', church: '⛪', hindu_temple: '⛪', mosque: '⛪', museum: '🏛️',
   zoo: '🦁', aquarium: '🐠', botanical_garden: '🌸', amusement_park: '🎡', amusement_center: '🛝',
   library: '📚', art_gallery: '🎨', natural_feature: '🌿', park: '🌳',
-  shopping_mall: '🏬', beach: '🏖️',
+  shopping_mall: '🏬', beach: '🏖️', ice_skating_rink: '⛸️',
 };
 
 function getEmojiOverride(types = [], name = '') {
@@ -275,16 +282,21 @@ function getEmojiOverride(types = [], name = '') {
 }
 
 function determineCategoryOverride(types = [], name = '') {
+  if (types.includes('aquarium') || types.includes('zoo') ||
+      /zoo|aquarium|safari|parc\s+animalier|ferme\s*(animaux|animalière?|pédagog|d['']élevage|enfants?)|papiliorama/i.test(name))
+    return 'Animaux';
+  if (types.includes('library') || /bibliothèque|médiathèque|ludothèque/i.test(name))
+    return 'Calme';
   if (
     types.some(t => ['museum','art_gallery','historic_site','castle','church',
-                     'hindu_temple','mosque','synagogue','library','tourist_attraction'].includes(t)) ||
+                     'hindu_temple','mosque','synagogue','tourist_attraction'].includes(t)) ||
     /château|castle|cathédrale|cathedral|mus[eé]e|museum|abbaye|église|monument|arch[eé]olog|patrimoine/i.test(name)
   ) return 'Culture';
   // Water/beach — must be Nature, checked before generic natural_feature to be explicit
   if (isWaterActivity(name, types)) return 'Nature';
   if (types.some(t => ['park','natural_feature','campground','nature_reserve','botanical_garden','beach'].includes(t)))
     return 'Nature';
-  if (types.some(t => ['zoo','amusement_park','amusement_center','aquarium'].includes(t)))
+  if (types.some(t => ['amusement_park','amusement_center'].includes(t)))
     return 'Loisirs';
   return null;
 }
@@ -300,6 +312,8 @@ const WHAT_TO_BRING_DEFAULTS = {
   Gastronomie:    ['Porte-monnaie', 'Petite faim'],
   Loisirs:        ['Eau', 'Petite veste', 'Porte-monnaie'],
   'Pause famille': ['Porte-monnaie', 'Petite faim'],
+  Animaux:        ['Eau', 'Porte-monnaie', 'Appareil photo', 'Vêtements adaptés'],
+  Calme:          ['Carte de bibliothèque', 'Porte-monnaie'],
 };
 
 const PRACTICAL_INFOS_DEFAULTS = {
@@ -309,6 +323,8 @@ const PRACTICAL_INFOS_DEFAULTS = {
   Gastronomie:    ['Horaires à vérifier avant de partir', 'Prix à vérifier'],
   Loisirs:        ['Horaires à vérifier avant de partir', 'Adapté aux enfants'],
   'Pause famille': ['Horaires à vérifier avant de partir', 'Prix à vérifier'],
+  Animaux:        ['Activité adaptée aux enfants', 'Tarifs et horaires à vérifier'],
+  Calme:          ['Entrée souvent gratuite', 'Horaires à vérifier avant de partir'],
 };
 
 
@@ -631,7 +647,7 @@ Règles STRICTES :
 14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles. INTERDIT : n'inclure JAMAIS de durée de trajet (ex: "30 min en voiture", "environ 20 min", "~15 min") — cette information est calculée automatiquement par le système.
 15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse/palais, ⛪ église/chapelle/abbaye/cathédrale/prieuré, 🌉 pont, 🌲 forêt/réserve, 🏛️ musée/monument historique, ⛰️ randonnée/sommet/belvédère, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc urbain, 🎡 UNIQUEMENT pour vrai parc d'attractions extérieur, 🛝 centre de loisirs enfants / aire de jeux / amusement center indoor, 🦋 papiliorama/papillons, 🎳 bowling (UNIQUEMENT si le lieu est explicitement un bowling), 🎬 cinéma, 🏊 piscine, ⛸️ patinoire, 🥐 boulangerie/pâtisserie, 🏬 centre commercial, 🏖️ plage. Jamais 🎳 pour un centre de loisirs, parc de jeux ou amusement center. Jamais 🎡 pour château, site naturel ou musée. Jamais 📍 ou 🗺️ pour un lieu culturel ou patrimonial.
 16. whatToBring : JAMAIS "Bonne humeur", "Appétit", "Monnaie" (seul), "Tenue confortable". Utilise : "Porte-monnaie", "Petite faim", "Eau", "Petite veste", "Chaussettes".
-17. type : bowling/café/boulangerie/pâtisserie/centre commercial → "indoor" OBLIGATOIRE. Plage/lac/parc → "outdoor".
+17. type : bowling/café/boulangerie/pâtisserie/centre commercial/piscine/patinoire/escalade → "indoor" OBLIGATOIRE. Plage/lac/parc/zoo → "outdoor".
 18. practicalInfos : N'INVENTE JAMAIS "Réservation recommandée le week-end" ou "Parking gratuit" sans source explicite dans les données.
 19. tags : JAMAIS "lieu à découvrir", "tourist_attraction", "point_of_interest", "establishment" comme tag.
 

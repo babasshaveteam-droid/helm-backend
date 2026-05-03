@@ -2,16 +2,16 @@
 const SEARCH_GROUPS = [
   ['park', 'museum', 'library', 'tourist_attraction', 'cafe'],
   ['park', 'art_gallery', 'museum', 'tourist_attraction', 'amusement_center'],
-  ['museum', 'library', 'tourist_attraction', 'cafe', 'park'],
-  ['zoo', 'park', 'tourist_attraction', 'museum', 'art_gallery'],
+  ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'museum', 'library'],
+  ['zoo', 'aquarium', 'park', 'tourist_attraction', 'museum'],
 ];
 
 // Weather-intent-specific place types — override SEARCH_GROUPS when weatherIntent is set
 const WEATHER_TYPES = {
-  rainy:    ['museum', 'library', 'bowling_alley', 'movie_theater', 'aquarium', 'amusement_center', 'shopping_mall'],
-  cold:     ['museum', 'library', 'movie_theater', 'bowling_alley', 'aquarium', 'cafe'],
-  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo'],
-  unstable: ['museum', 'library', 'cafe', 'bowling_alley', 'shopping_mall', 'park'],
+  rainy:    ['museum', 'library', 'bowling_alley', 'movie_theater', 'aquarium', 'amusement_center', 'shopping_mall', 'swimming_pool', 'ice_skating_rink'],
+  cold:     ['museum', 'library', 'movie_theater', 'bowling_alley', 'aquarium', 'cafe', 'swimming_pool', 'ice_skating_rink'],
+  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool'],
+  unstable: ['museum', 'library', 'cafe', 'bowling_alley', 'shopping_mall', 'park', 'swimming_pool', 'ice_skating_rink'],
   sunny:    ['park', 'zoo', 'tourist_attraction', 'botanical_garden', 'amusement_park'],
 };
 

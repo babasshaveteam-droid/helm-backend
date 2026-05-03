@@ -156,21 +156,42 @@ const FAMILIES = {
     forbiddenTags: [],
   },
 
+  sport_indoor: {
+    detect: (name, types) =>
+      types.includes('swimming_pool') ||
+      types.includes('ice_skating_rink') ||
+      /piscine|centre\s+aquatique|patinoire|ice\s*skat|escalade|climbing\s*(gym|center|wall)|bloc\b/i.test(name),
+    category:    'Sport',
+    type:        'indoor',
+    icon:        null, // 🏊 piscine / ⛸️ patinoire / 🧗 escalade via getEmojiOverride
+    effortLevel: 'Modéré',
+    weatherFit:  ['rainy', 'cold', 'unstable'],
+    subtitle:    "Une activité sportive à l'abri pour se dépenser en famille.",
+    whyGoodIdea: "Un endroit idéal pour bouger et se dépenser en intérieur, peu importe la météo.",
+    benefit:     "Sport et dépense à l'abri",
+    whatToBring: ['Tenue de sport', 'Serviette', 'Eau', 'Porte-monnaie'],
+    practicalInfos: ['Activité couverte', 'Tarifs à vérifier avant de partir'],
+    tags:        ['sport', 'intérieur', 'famille', 'pluie', 'dépense'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [/réservation recommandée le week-end/i],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
   zoo_animals: {
     detect: (name, types) =>
-      types.includes('zoo') ||
-      /zoo|safari|parc\s+animalier|ferme\s*(animaux|animalière?|pédagog|d['']élevage|enfants?)/i.test(name),
-    category:    'Loisirs',
+      types.includes('zoo') || types.includes('aquarium') ||
+      /zoo|aquarium|safari|parc\s+animalier|ferme\s*(animaux|animalière?|pédagog|d['']élevage|enfants?)|papiliorama/i.test(name),
+    category:    'Animaux',
     type:        'outdoor',
-    icon:        '🦁',
+    icon:        null, // 🦁 zoo / 🐠 aquarium / 🦋 papiliorama via getEmojiOverride
     effortLevel: 'Facile',
     weatherFit:  ['sunny', 'unstable'],
-    subtitle:    null,
-    whyGoodIdea: null,
-    benefit:     null,
-    whatToBring: null,
-    practicalInfos: null,
-    tags:        null,
+    subtitle:    "Une découverte du monde animal pour petits et grands.",
+    whyGoodIdea: "Les enfants adorent observer les animaux de près. Une sortie éducative et mémorable.",
+    benefit:     "Découverte des animaux en famille",
+    whatToBring: ['Eau', 'Porte-monnaie', 'Appareil photo', 'Vêtements adaptés'],
+    practicalInfos: ['Activité adaptée aux enfants', 'Tarifs et horaires à vérifier'],
+    tags:        ['animaux', 'famille', 'nature', 'éducatif', 'découverte'],
     skipIsOpen:  false,
     forbiddenPracticalInfos: [/réservation recommandée le week-end/i],
     forbiddenTags: ["parc d'attractions", 'lieu à découvrir'],
@@ -194,6 +215,26 @@ const FAMILIES = {
     skipIsOpen:  false,
     forbiddenPracticalInfos: [/réservation recommandée/i],
     forbiddenTags: ['café', 'lieu à découvrir'],
+  },
+
+  library_quiet: {
+    detect: (name, types) =>
+      types.includes('library') ||
+      /bibliothèque|médiathèque|ludothèque/i.test(name),
+    category:    'Calme',
+    type:        'indoor',
+    icon:        '📚',
+    effortLevel: 'Facile',
+    weatherFit:  ['rainy', 'cold', 'unstable'],
+    subtitle:    "Un endroit calme pour lire, jouer ou découvrir ensemble.",
+    whyGoodIdea: "Une pause culturelle et apaisante, parfaite pour les enfants curieux.",
+    benefit:     "Calme et culture à l'abri",
+    whatToBring: ['Carte de bibliothèque', 'Porte-monnaie'],
+    practicalInfos: ['Entrée souvent gratuite', 'Horaires à vérifier avant de partir'],
+    tags:        ['lecture', 'calme', 'intérieur', 'famille', 'gratuit'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [/réservation recommandée/i],
+    forbiddenTags: ['lieu à découvrir'],
   },
 
   culture: {
@@ -376,6 +417,7 @@ function applyFamilyRules(activity, placeName = '', placeTypes = [], opts = {}) 
     const PASTEL = {
       Nature: '#E8F5E9', Culture: '#FFF3E0', Sport: '#E3F2FD',
       Gastronomie: '#FFF3E0', Loisirs: '#F5F0FF', 'Pause famille': '#FFF3E0',
+      Animaux: '#FFF8E1', Calme: '#F3E5F5',
     };
     a.colorTheme = PASTEL[a.category] ?? a.colorTheme;
   }
