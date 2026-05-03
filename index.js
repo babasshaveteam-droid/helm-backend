@@ -3,6 +3,7 @@ const cors = require('cors');
 const { fetchNearbyPlaces } = require('./places');
 const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
+const { applyFamilyRules } = require('./activityRules');
 
 const app = express();
 app.use(cors());
@@ -176,6 +177,7 @@ const TYPE_EMOJI = {
   nature_reserve: '🦋', zoo: '🦁',
   aquarium: '🐠', botanical_garden: '🌸',
   shopping_mall: '🏬', beach: '🏖️',
+  bowling_alley: '🎳',
 };
 
 function typeEmoji(types = []) {
@@ -289,40 +291,21 @@ function determineCategoryOverride(types = [], name = '') {
 const HERITAGE_WHAT_TO_BRING = ['Appareil photo', 'Eau', 'Chaussures confortables', 'Petite veste'];
 
 const WHAT_TO_BRING_DEFAULTS = {
-  Nature:      ['Chaussures confortables', 'Bouteille d\'eau', 'Vêtements adaptés à la météo'],
-  Culture:     ['Curiosité et questions des enfants', 'Appareil photo', 'Monnaie pour les entrées'],
-  Sport:       ['Tenue de sport', 'Bouteille d\'eau', 'Chaussures adaptées'],
-  Gastronomie: ['Appétit', 'Monnaie'],
-  Loisirs:     ['Tenue confortable', 'Bonne humeur', 'Monnaie'],
+  Nature:      ['Chaussures confortables', "Bouteille d'eau", 'Vêtements adaptés à la météo'],
+  Culture:     ['Appareil photo', 'Eau', 'Porte-monnaie'],
+  Sport:       ['Tenue de sport', "Bouteille d'eau", 'Chaussures adaptées'],
+  Gastronomie: ['Porte-monnaie', 'Petite faim'],
+  Loisirs:     ['Eau', 'Petite veste', 'Porte-monnaie'],
 };
 
 const PRACTICAL_INFOS_DEFAULTS = {
   Nature:      ['Horaires à vérifier avant de partir', 'Accès en voiture conseillé'],
   Culture:     ['Horaires à vérifier avant de partir', 'Adresse disponible dans l\'itinéraire', 'Prix à vérifier'],
   Sport:       ['Horaires à vérifier avant de partir', 'Réservation parfois nécessaire'],
-  Gastronomie: ['Horaires à vérifier avant de partir', 'Réservation recommandée le week-end'],
+  Gastronomie: ["Horaires à vérifier avant de partir", 'Prix à vérifier'],
   Loisirs:     ['Horaires à vérifier avant de partir', 'Adapté aux enfants'],
 };
 
-// ─── Shopping mall content ────────────────────────────────────────────────────
-
-const SHOPPING_MALL_SUBTITLE  = "Une option pratique pour se mettre à l'abri et faire une pause en famille.";
-const SHOPPING_MALL_WHY       = "Un lieu couvert pour marcher un peu, prendre un goûter ou occuper les enfants quand la météo est incertaine.";
-const SHOPPING_MALL_BENEFIT   = "À l'abri et pratique avec les enfants";
-const SHOPPING_MALL_WHAT_TO_BRING = ['Porte-monnaie', 'Petite veste', 'Eau'];
-const SHOPPING_MALL_TAGS      = ['intérieur', 'abri', 'famille', 'shopping', 'pause'];
-const SHOPPING_MALL_PRACTICAL = ["Horaires à vérifier avant de partir", 'Lieu couvert', 'Restauration possible sur place'];
-const SHOPPING_MALL_WEATHER_FIT = ['rainy', 'cold', 'unstable', 'hot'];
-
-// ─── Water / beach content ────────────────────────────────────────────────────
-
-const WATER_SUBTITLE  = "Une sortie simple au bord de l'eau pour prendre l'air en famille.";
-const WATER_WHY       = "Un lieu agréable pour marcher, observer l'eau et profiter d'un moment dehors avec les enfants.";
-const WATER_BENEFIT   = "Prendre l'air au bord de l'eau";
-const WATER_WHAT_TO_BRING = ['Eau', 'Casquette ou crème solaire', 'Vêtements adaptés'];
-const WATER_TAGS      = ['plage', 'eau', 'extérieur', 'famille', 'balade'];
-const WATER_PRACTICAL = ["Accès au bord de l'eau", 'Baignade à vérifier selon la saison'];
-const WATER_WEATHER_FIT = ['sunny', 'hot', 'unstable'];
 
 // ─── Merge Claude output with real place data ─────────────────────────────────
 // Any sourceId Claude returns that isn't in placesMap is silently discarded —
@@ -340,66 +323,26 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon, weatherInte
       ? haversineKm(userLat, userLon, place.lat, place.lon)
       : null;
 
-  // Fix 2: titre en français (remplace les titres anglais)
   const titre = correctTitle(claudeItem.titre, place.name);
 
-  // Fix 3: catégorie déterministe (château → Culture, etc.) — avant emoji
-  const isMall  = isShoppingMall(place.name, place.types);
-  const isWater = isWaterActivity(place.name, place.types);
   const category = determineCategoryOverride(place.types, place.name)
                    || claudeItem.category
                    || guessCategory(place.types)
                    || 'Loisirs';
 
-  // Fix 4: emoji déterministe — jamais 🗺️/📍 pour un lieu culturel précis
   const emojiOverride = getEmojiOverride(place.types, place.name);
   const rawEmoji      = emojiOverride || claudeItem.emoji || typeEmoji(place.types);
   const emoji = (category === 'Culture' && (rawEmoji === '🗺️' || rawEmoji === '📍'))
     ? '🏛️'
     : rawEmoji;
 
-  // Fix 5: couleur restreinte aux 5 pastels exacts
   const colorTheme = safeColorTheme(claudeItem.colorTheme, category);
 
-  // Fix 6: fallback whatToBring — mall/water overrides, then heritage, then category defaults
   const rawWhatToBring = Array.isArray(claudeItem.whatToBring) ? claudeItem.whatToBring : [];
-  const whatToBring = isMall ? SHOPPING_MALL_WHAT_TO_BRING
-    : isWater ? WATER_WHAT_TO_BRING
-    : rawWhatToBring.length > 0 ? rawWhatToBring
-    : (isHeritageSite(place.name, place.types)
-        ? HERITAGE_WHAT_TO_BRING
-        : (WHAT_TO_BRING_DEFAULTS[category] ?? WHAT_TO_BRING_DEFAULTS.Loisirs));
+  const rawPractical   = Array.isArray(claudeItem.practicalInfos) ? claudeItem.practicalInfos : [];
+  const rawTags        = Array.isArray(claudeItem.tags) ? claudeItem.tags : [];
+  const cleanedTags    = filterTags(rawTags);
 
-  // Fix 6: fallback si Claude retourne practicalInfos vide (mall/water ont leurs propres defaults)
-  const rawPractical = Array.isArray(claudeItem.practicalInfos) ? claudeItem.practicalInfos : [];
-  let practicalInfos;
-  if (isMall) {
-    practicalInfos = place.isOpen != null
-      ? [place.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir', ...SHOPPING_MALL_PRACTICAL.slice(1)]
-      : SHOPPING_MALL_PRACTICAL;
-  } else if (isWater) {
-    practicalInfos = rawPractical.length > 0
-      ? rawPractical.filter(i => !/réservation recommandée/i.test(i))
-      : WATER_PRACTICAL;
-  } else if (rawPractical.length > 0) {
-    practicalInfos = rawPractical;
-  } else if (place.isOpen != null) {
-    practicalInfos = [
-      place.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir',
-      ...(PRACTICAL_INFOS_DEFAULTS[category] ?? []).slice(1),
-    ];
-  } else {
-    practicalInfos = PRACTICAL_INFOS_DEFAULTS[category] ?? ['Horaires à vérifier avant de partir'];
-  }
-
-  // Fix 7: tags — mall/water overrides first, then Claude tags cleaned, then fallback
-  const rawTags     = Array.isArray(claudeItem.tags) ? claudeItem.tags : [];
-  const cleanedTags = filterTags(rawTags);
-  const tags = isMall ? SHOPPING_MALL_TAGS
-    : isWater ? (cleanedTags.filter(t => t !== 'café').length > 0 ? cleanedTags.filter(t => t !== 'café') : WATER_TAGS)
-    : (cleanedTags.length > 0 ? cleanedTags : (isHeritageSite(place.name, place.types) ? getHeritageTags(place.name) : cleanTags(place.types)));
-
-  // Fix 1: travelTimeLabel avec fallback haversine si Routes API a échoué
   const travelTimeLabel = place.routeDurationSeconds != null
     ? formatTravelTime(place.routeDurationSeconds)
     : (km != null ? `~${Math.round((km / 50) * 60)} min en voiture` : null);
@@ -415,7 +358,28 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon, weatherInte
 
   const subtitle = claudeItem.subtitle || '';
 
-  return {
+  // Default whatToBring/practicalInfos/tags before family correction gate
+  const whatToBring = rawWhatToBring.length > 0 ? rawWhatToBring
+    : (isHeritageSite(place.name, place.types)
+        ? HERITAGE_WHAT_TO_BRING
+        : (WHAT_TO_BRING_DEFAULTS[category] ?? WHAT_TO_BRING_DEFAULTS.Loisirs));
+
+  let practicalInfos;
+  if (rawPractical.length > 0) {
+    practicalInfos = rawPractical;
+  } else if (place.isOpen != null) {
+    practicalInfos = [
+      place.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir',
+      ...(PRACTICAL_INFOS_DEFAULTS[category] ?? []).slice(1),
+    ];
+  } else {
+    practicalInfos = PRACTICAL_INFOS_DEFAULTS[category] ?? ['Horaires à vérifier avant de partir'];
+  }
+
+  const tags = cleanedTags.length > 0 ? cleanedTags
+    : (isHeritageSite(place.name, place.types) ? getHeritageTags(place.name) : cleanTags(place.types));
+
+  const result = {
     id: place.sourceId,
     emoji,
     titre,
@@ -432,11 +396,11 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon, weatherInte
     budget: claudeItem.priceLabel || 'À vérifier',
     priceLabel: claudeItem.priceLabel || 'À vérifier',
     priceAmount: claudeItem.priceAmount ?? null,
-    type: isMall ? 'indoor' : (isWater ? 'outdoor' : (claudeItem.type || 'outdoor')),
+    type: claudeItem.type || 'outdoor',
     minAgeLabel: claudeItem.minAgeLabel || 'À vérifier',
     category,
     mood: Array.isArray(claudeItem.mood) ? claudeItem.mood : [],
-    weatherFit: isMall ? SHOPPING_MALL_WEATHER_FIT : isWater ? WATER_WEATHER_FIT : (Array.isArray(claudeItem.weatherFit) ? claudeItem.weatherFit : ['any']),
+    weatherFit: Array.isArray(claudeItem.weatherFit) ? claudeItem.weatherFit : ['any'],
     weatherReason: claudeItem.weatherReason || null,
     weatherIntent: weatherIntent || null,
     reservationRequired: claudeItem.reservationRequired ?? false,
@@ -455,6 +419,8 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon, weatherInte
     source: 'google_places',
     sourceId: place.sourceId,
   };
+
+  return applyFamilyRules(result, place.name, place.types, { fromFallback: false, isOpen: place.isOpen });
 }
 
 // ─── Fallback: Google places → minimal Activity (Claude unavailable) ───────────
@@ -466,33 +432,10 @@ function placesToFallback(places, userLat, userLon, weatherIntent) {
         ? haversineKm(userLat, userLon, p.lat, p.lon)
         : null;
     const emoji    = getEmojiOverride(p.types, p.name) || typeEmoji(p.types);
-    const isMall   = isShoppingMall(p.name, p.types);
-    const isWater  = isWaterActivity(p.name, p.types);
     const category = determineCategoryOverride(p.types, p.name) || guessCategory(p.types);
-    const heritage = !isMall && !isWater && isHeritageSite(p.name, p.types);
-    const subtitle = isMall ? SHOPPING_MALL_SUBTITLE
-      : isWater   ? WATER_SUBTITLE
-      : (SUBTITLE_BY_CATEGORY[category] ?? 'Idéal pour une sortie en famille.');
-    const benefit    = isMall ? SHOPPING_MALL_BENEFIT : isWater ? WATER_BENEFIT : 'Un lieu proche à découvrir en famille';
-    const whyGoodIdea = isMall ? SHOPPING_MALL_WHY : isWater ? WATER_WHY : subtitle;
-    const whatToBring = isMall ? SHOPPING_MALL_WHAT_TO_BRING
-      : isWater   ? WATER_WHAT_TO_BRING
-      : (heritage ? HERITAGE_WHAT_TO_BRING : (WHAT_TO_BRING_DEFAULTS[category] ?? []));
-    const tags = isMall ? SHOPPING_MALL_TAGS
-      : isWater ? WATER_TAGS
-      : (heritage ? getHeritageTags(p.name) : cleanTags(p.types));
-    const weatherFit = isMall ? SHOPPING_MALL_WEATHER_FIT : isWater ? WATER_WEATHER_FIT : ['any'];
-    const practicalInfos = isMall
-      ? (p.isOpen != null
-          ? [p.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir', ...SHOPPING_MALL_PRACTICAL.slice(1)]
-          : SHOPPING_MALL_PRACTICAL)
-      : isWater
-      ? WATER_PRACTICAL
-      : [
-          ...(p.isOpen != null ? [p.isOpen ? 'Ouvert maintenant' : 'Horaires à vérifier avant de partir'] : ['Horaires à vérifier avant de partir']),
-          ...(PRACTICAL_INFOS_DEFAULTS[category] ?? []).slice(1),
-        ];
-    return {
+    const subtitle = SUBTITLE_BY_CATEGORY[category] ?? 'Idéal pour une sortie en famille.';
+
+    const base = {
       id: p.sourceId,
       emoji,
       titre: p.name,
@@ -509,21 +452,21 @@ function placesToFallback(places, userLat, userLon, weatherIntent) {
       budget: 'Prix à vérifier',
       priceLabel: 'Prix à vérifier',
       priceAmount: null,
-      type: isMall ? 'indoor' : 'outdoor',
+      type: 'outdoor',
       minAgeLabel: 'Tout âge',
       category,
       mood: [],
-      weatherFit,
+      weatherFit: ['any'],
       weatherReason: null,
       weatherIntent: weatherIntent || null,
       reservationRequired: false,
       icon: emoji,
       colorTheme: CATEGORY_PASTEL_MAP[category] ?? '#F5F0FF',
-      benefit,
-      whyGoodIdea,
-      whatToBring,
-      practicalInfos,
-      tags,
+      benefit: 'Un lieu proche à découvrir',
+      whyGoodIdea: subtitle,
+      whatToBring: [],
+      practicalInfos: [],
+      tags: [],
       effortLevel: 'Facile',
       travelTimeLabel: p.routeDurationSeconds != null
         ? formatTravelTime(p.routeDurationSeconds)
@@ -536,6 +479,8 @@ function placesToFallback(places, userLat, userLon, weatherIntent) {
       source: 'google_places',
       sourceId: p.sourceId,
     };
+
+    return applyFamilyRules(base, p.name, p.types, { fromFallback: true, isOpen: p.isOpen });
   });
 }
 
@@ -679,7 +624,11 @@ Règles STRICTES :
 12. Ordre de priorité : (1) activités faciles à organiser et proches, (2) culturelles accessibles, (3) nature accessible, (4) aventure en dernier — si aventure, effortLevel="Aventure" obligatoire
 13. Titres en français : utilise le nom français officiel du lieu quand il existe — ex: "Cathédrale Saint-Nicolas" et non "St-Nicolas Cathedral", "Musée d'art et d'histoire" et non "Museum of Art and History". Conserve le nom officiel s'il n'a pas d'équivalent français naturel.
 14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles. INTERDIT : n'inclure JAMAIS de durée de trajet (ex: "30 min en voiture", "environ 20 min", "~15 min") — cette information est calculée automatiquement par le système.
-15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse/palais, ⛪ église/chapelle/abbaye/cathédrale/prieuré, 🌉 pont, 🌲 forêt/réserve, 🏛️ musée/monument historique, ⛰️ randonnée/sommet/belvédère, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc urbain, 🎡 UNIQUEMENT pour vrai parc d'attractions, 🦋 papiliorama/papillons, 🎳 bowling, 🎬 cinéma, 🏊 piscine, ⛸️ patinoire, 🥐 boulangerie/pâtisserie. Jamais 🎡 pour château, site naturel ou musée. Jamais 📍 ou 🗺️ pour un lieu culturel ou patrimonial.
+15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse/palais, ⛪ église/chapelle/abbaye/cathédrale/prieuré, 🌉 pont, 🌲 forêt/réserve, 🏛️ musée/monument historique, ⛰️ randonnée/sommet/belvédère, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc urbain, 🎡 UNIQUEMENT pour vrai parc d'attractions, 🦋 papiliorama/papillons, 🎳 bowling, 🎬 cinéma, 🏊 piscine, ⛸️ patinoire, 🥐 boulangerie/pâtisserie, 🏬 centre commercial, 🏖️ plage. Jamais 🎡 pour château, site naturel ou musée. Jamais 📍 ou 🗺️ pour un lieu culturel ou patrimonial.
+16. whatToBring : JAMAIS "Bonne humeur", "Appétit", "Monnaie" (seul), "Tenue confortable". Utilise : "Porte-monnaie", "Petite faim", "Eau", "Petite veste", "Chaussettes".
+17. type : bowling/café/boulangerie/pâtisserie/centre commercial → "indoor" OBLIGATOIRE. Plage/lac/parc → "outdoor".
+18. practicalInfos : N'INVENTE JAMAIS "Réservation recommandée le week-end" ou "Parking gratuit" sans source explicite dans les données.
+19. tags : JAMAIS "lieu à découvrir", "tourist_attraction", "point_of_interest", "establishment" comme tag.
 
 Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ) :
 {
