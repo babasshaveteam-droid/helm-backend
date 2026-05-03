@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { fetchNearbyPlaces } = require('./places');
+const { fetchNearbyPlaces, fetchTargetedSearch } = require('./places');
 const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
 const { applyFamilyRules } = require('./activityRules');
@@ -748,14 +748,49 @@ app.post('/generer-activites', async (req, res) => {
     // 4. Normalize → deduplicate → filter family-appropriate → exclude already-seen
     const excludeSet = new Set(Array.isArray(exclude) ? exclude : []);
     const normalized = rawPlaces.map(normalizePlace);
-    const deduped = deduplicate(normalized).filter(isFamilyPlace);
+    let deduped = deduplicate(normalized).filter(isFamilyPlace);
+
+    // 4a. Recherche ciblée par mots-clés pour familles sans type Google Places dédié
+    // searchGroup 1 → escalade/climbing/trampoline ; searchGroup 2 → ferme pédagogique/parc animalier
+    const TARGETED_QUERIES = {
+      1: 'salle escalade climbing bloc trampoline',
+      2: 'ferme pédagogique parc animalier',
+    };
+    if (TARGETED_QUERIES[searchGroup] && !weatherIntent) {
+      try {
+        const targeted = await fetchTargetedSearch(
+          latitude, longitude, radiusMeters,
+          GOOGLE_PLACES_API_KEY, TARGETED_QUERIES[searchGroup], 10
+        );
+        console.log(`[backend] Ciblée "${TARGETED_QUERIES[searchGroup]}": ${targeted.length} résultats`);
+        const targetedNorm = targeted.map(normalizePlace).filter(isFamilyPlace);
+        deduped = deduplicate([...deduped, ...targetedNorm]);
+      } catch (e) {
+        console.warn('[backend] Recherche ciblée échoue (non bloquant):', e.message);
+      }
+    }
+
     let fresh = excludeSet.size > 0 ? deduped.filter(p => !excludeSet.has(p.sourceId)) : deduped;
+
+    // 4b. Filtre qualité à longue distance — éviter cafés/parcs génériques loin
+    const HIGH_VALUE_LONG_DISTANCE = new Set([
+      'zoo', 'aquarium', 'museum', 'art_gallery', 'amusement_center', 'amusement_park',
+      'bowling_alley', 'swimming_pool', 'ice_skating_rink', 'library',
+      'historic_site', 'castle', 'botanical_garden', 'tourist_attraction', 'natural_feature',
+    ]);
+    if (radiusMeters > 40000 && fresh.length >= 3) {
+      const highValue = fresh.filter(p => p.types.some(t => HIGH_VALUE_LONG_DISTANCE.has(t)));
+      if (highValue.length >= 3) {
+        fresh = highValue;
+        console.log(`[backend] Filtre qualité longue distance (${radiusMeters}m): ${fresh.length} lieux haute valeur`);
+      }
+    }
 
     // If too few fresh results after filtering, retry with a wider radius
     if (fresh.length < 3 && excludeSet.size > 0) {
       console.log(`[backend] Seulement ${fresh.length} candidats après exclusion — rayon élargi`);
       try {
-        const widerRadius = Math.min(Math.round(radiusMeters * 1.5), 40000);
+        const widerRadius = Math.min(Math.round(radiusMeters * 1.5), 80000);
         const rawPlaces2 = await fetchNearbyPlaces(latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4, null);
         const fresh2 = deduplicate(rawPlaces2.map(normalizePlace))
           .filter(isFamilyPlace)
