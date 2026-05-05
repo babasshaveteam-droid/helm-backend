@@ -15,6 +15,17 @@ const OPENROUTER_ENABLED = process.env.OPENROUTER_ENABLED !== 'false';
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4-5';
 const DAILY_BUDGET_USD = parseFloat(process.env.OPENROUTER_DAILY_BUDGET_USD || '0') || 0;
 
+// Prix par million de tokens selon le modèle (OpenRouter, mai 2026)
+const MODEL_PRICING = {
+  'anthropic/claude-sonnet-4-5': { in: 3.0,  out: 15.0 },
+  'anthropic/claude-haiku-4-5':  { in: 0.80, out: 4.0  },
+  'anthropic/claude-opus-4-7':   { in: 15.0, out: 75.0 },
+};
+function estimateCost(inTok, outTok) {
+  const p = MODEL_PRICING[OPENROUTER_MODEL] ?? MODEL_PRICING['anthropic/claude-sonnet-4-5'];
+  return (inTok * p.in + outTok * p.out) / 1_000_000;
+}
+
 if (!OPENROUTER_KEY) throw new Error('OPENROUTER_KEY manquante');
 
 // ─── Cache activités (in-memory, TTL 20 min) ─────────────────────────────────
@@ -935,9 +946,9 @@ app.post('/generer-activites', async (req, res) => {
       if (usage) {
         const inTok = usage.prompt_tokens || 0;
         const outTok = usage.completion_tokens || 0;
-        const costUSD = (inTok * 3 + outTok * 15) / 1_000_000;
+        const costUSD = estimateCost(inTok, outTok);
         trackSpend(costUSD);
-        console.log(`[cost] ${inTok} in + ${outTok} out tokens | ~$${costUSD.toFixed(4)} | ${Date.now() - t0}ms`);
+        console.log(`[cost] ${inTok} in + ${outTok} out tokens | ~$${costUSD.toFixed(5)} | ${Date.now() - t0}ms`);
       } else {
         console.log(`[cost] Réponse OpenRouter sans usage (${Date.now() - t0}ms)`);
       }
