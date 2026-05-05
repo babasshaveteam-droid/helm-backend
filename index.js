@@ -11,8 +11,59 @@ app.use(express.json());
 
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
+const OPENROUTER_ENABLED = process.env.OPENROUTER_ENABLED !== 'false';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4-5';
+const DAILY_BUDGET_USD = parseFloat(process.env.OPENROUTER_DAILY_BUDGET_USD || '0') || 0;
 
 if (!OPENROUTER_KEY) throw new Error('OPENROUTER_KEY manquante');
+
+// ─── Cache activités (in-memory, TTL 20 min) ─────────────────────────────────
+
+const ACTIVITY_CACHE = new Map();
+const CACHE_TTL_MS = 20 * 60 * 1000;
+
+function getCacheKey(lat, lon, weatherIntent, radiusMeters, searchGroup, exclude) {
+  const latR = Math.round(lat * 100) / 100;
+  const lonR = Math.round(lon * 100) / 100;
+  const excKey = exclude.length === 0 ? '' : '|' + [...exclude].sort().join(',');
+  return `${latR},${lonR}|${weatherIntent}|${radiusMeters}|${searchGroup}${excKey}`;
+}
+
+function getCached(key) {
+  const entry = ACTIVITY_CACHE.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { ACTIVITY_CACHE.delete(key); return null; }
+  return entry.activities;
+}
+
+function setCache(key, activities) {
+  ACTIVITY_CACHE.set(key, { activities, expiresAt: Date.now() + CACHE_TTL_MS });
+  if (ACTIVITY_CACHE.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of ACTIVITY_CACHE) { if (now > v.expiresAt) ACTIVITY_CACHE.delete(k); }
+  }
+}
+
+// ─── Budget journalier OpenRouter (in-memory, reset à minuit) ────────────────
+
+let dailySpendUSD = 0;
+let dailySpendResetAt = Date.now() + 24 * 60 * 60 * 1000;
+
+function trackSpend(costUSD) {
+  if (Date.now() > dailySpendResetAt) {
+    dailySpendUSD = 0;
+    dailySpendResetAt = Date.now() + 24 * 60 * 60 * 1000;
+    console.log('[cost] Budget journalier réinitialisé');
+  }
+  dailySpendUSD += costUSD;
+  console.log(`[cost] Dépense journalière: $${dailySpendUSD.toFixed(4)}${DAILY_BUDGET_USD > 0 ? ' / $' + DAILY_BUDGET_USD : ''}`);
+}
+
+function isBudgetExceeded() {
+  if (!DAILY_BUDGET_USD) return false;
+  if (Date.now() > dailySpendResetAt) { dailySpendUSD = 0; dailySpendResetAt = Date.now() + 24 * 60 * 60 * 1000; }
+  return dailySpendUSD >= DAILY_BUDGET_USD;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -642,84 +693,59 @@ function buildWeatherInstruction(weatherIntent) {
   return instruction ? `\n⚠️ Consigne météo : ${instruction}` : '';
 }
 
-// ─── Claude prompt ────────────────────────────────────────────────────────────
+// ─── Claude prompt (compact) ─────────────────────────────────────────────────
+// Champs non demandés à Claude (gérés localement) : emoji, titre, category,
+// colorTheme, type, reservationRequired, icon, tags — tous overridés par le code.
 
-function buildClaudePrompt(places, { latitude, longitude, weather, weatherCondition, weatherTemp, weatherIntent, filters, exclude }) {
-  const excludeBlock =
-    Array.isArray(exclude) && exclude.length > 0
-      ? `🚫 LISTE NOIRE — Ne sélectionne JAMAIS ces lieux (ni rien de similaire) :\n${exclude.map(t => `  ❌ "${t}"`).join('\n')}\n\n`
-      : '';
-
+function buildClaudePrompt(places, { weatherCondition, weatherTemp, weatherIntent }) {
   const placesJson = JSON.stringify(
     places.map(p => ({
       sourceId: p.sourceId,
       name: p.name,
-      address: p.address,
       types: p.types,
-      rating: p.rating,
-      ratingCount: p.ratingCount,
-      isOpen: p.isOpen,
+      rating: p.rating ?? null,
+      isOpen: p.isOpen ?? null,
     })),
-    null,
-    2
+    null, 2
   );
 
-  return `Tu es l'assistant de l'application Helm — une app famille chaleureuse et bienveillante.
+  const weatherNote = weatherIntent && weatherIntent !== 'neutral'
+    ? `\nMétéo : ${weatherCondition || ''} ${weatherTemp != null ? weatherTemp + '°C' : ''} → ${WEATHER_INSTRUCTIONS[weatherIntent] ?? ''}`
+    : '';
 
-${excludeBlock}Voici ${places.length} lieux RÉELS proches (source : Google Places) :
+  return `Tu es l'assistant Helm (app famille). Sélectionne 3 à 8 lieux parmi la liste et génère un JSON enrichi pour chacun.${weatherNote}
+
+Lieux disponibles (source Google Places) :
 ${placesJson}
 
-Contexte :
-- Position : lat=${latitude}, lon=${longitude}
-- Météo : ${weatherCondition || weather || 'non renseignée'} / ${weatherTemp != null ? weatherTemp + '°C' : 'temp inconnue'} / intent=${weatherIntent || 'neutral'}
-- Filtres famille : ${Array.isArray(filters) && filters.length ? filters.join(', ') : 'aucun'}
-${buildWeatherInstruction(weatherIntent)}
+Règles :
+1. Sélectionne UNIQUEMENT des sourceId de la liste. N'invente aucun lieu.
+2. N'invente pas de prix, horaires, parking, WiFi, réservation — si incertain : "à vérifier".
+3. Textes courts et chaleureux, max 1 phrase par champ texte. Pas de marketing.
+4. effortLevel : "Facile" (parc/musée/café), "Moyen" (grande visite culturelle), "Aventure" (randonnée/terrain difficile).
+5. whyGoodIdea : phrase concrète utile pour un parent.
+6. subtitle : pour quel type de famille, différent de whyGoodIdea.
+7. weatherReason : ≤32 caractères avec emoji (ex: "☀️ Idéal avec ce soleil").
+8. practicalInfos : 2-3 infos DISTINCTES. JAMAIS de durée de trajet.
+9. whatToBring : items pratiques. Jamais "Bonne humeur" ni "Tenue confortable".
+10. Retourne UNIQUEMENT un tableau JSON valide, sans texte avant ou après.
 
-Règles STRICTES :
-1. Sélectionne 3 à 8 lieux UNIQUEMENT parmi ceux listés ci-dessus
-2. INTERDIT d'inventer ou d'ajouter un lieu absent de la liste
-3. Si le prix est inconnu → "Prix à vérifier" pour priceLabel, null pour priceAmount
-4. Si les horaires sont inconnus → "Horaires à vérifier avant de partir" dans practicalInfos
-5. Écarte les lieux inadaptés aux enfants ou trop formels
-6. Textes courts et chaleureux — style Helm (max 1 phrase par champ texte)
-7. Retourne UNIQUEMENT un tableau JSON valide strict, sans markdown, sans texte avant ou après
-8. N'invente AUCUNE information factuelle précise absente des données source : pas de nombre de marches, distances exactes, prix précis, horaires exacts, "parking proche", "365 marches", "accès WiFi". Si incertain → "à vérifier avant de partir"
-9. effortLevel : évalue honnêtement selon le lieu — "Facile" (parc, bibliothèque, musée accessible, café), "Moyen" (cathédrale avec visite, grand musée, culture étendue), "Aventure" (randonnée, montagne, terrain difficile, plusieurs heures de marche). Ce champ est OBLIGATOIRE.
-10. whyGoodIdea : 1 phrase concrète et utile pour un parent — ex: "Une belle sortie pour marcher et profiter d'un grand panorama en famille." Éviter les formules marketing comme "émerveillera toute la famille"
-11. subtitle : expliquer pour quel type de famille c'est adapté, différent du whyGoodIdea — ex: "Idéal pour les familles qui aiment marcher et passer du temps en nature."
-12. Ordre de priorité : (1) activités faciles à organiser et proches, (2) culturelles accessibles, (3) nature accessible, (4) aventure en dernier — si aventure, effortLevel="Aventure" obligatoire
-13. Titres en français : utilise le nom français officiel du lieu quand il existe — ex: "Cathédrale Saint-Nicolas" et non "St-Nicolas Cathedral", "Musée d'art et d'histoire" et non "Museum of Art and History". Conserve le nom officiel s'il n'a pas d'équivalent français naturel.
-14. practicalInfos : chaque entrée doit apporter une information DISTINCTE — ne répète jamais deux fois la même information (même reformulée). Maximum 3 infos pratiques utiles. INTERDIT : n'inclure JAMAIS de durée de trajet (ex: "30 min en voiture", "environ 20 min", "~15 min") — cette information est calculée automatiquement par le système.
-15. emoji : choisis selon la nature réelle du lieu — 🏰 château/forteresse/palais, ⛪ église/chapelle/abbaye/cathédrale/prieuré, 🌉 pont, 🌲 forêt/réserve, 🏛️ musée/monument historique, ⛰️ randonnée/sommet/belvédère, 🦁 zoo, 🌊 lac/rivière/plage, 🌳 parc urbain, 🎡 UNIQUEMENT pour vrai parc d'attractions extérieur, 🛝 centre de loisirs enfants / aire de jeux / amusement center indoor, 🦋 papiliorama/papillons, 🎳 bowling (UNIQUEMENT si le lieu est explicitement un bowling), 🎬 cinéma, 🏊 piscine, ⛸️ patinoire, 🥐 boulangerie/pâtisserie, 🏬 centre commercial, 🏖️ plage. Jamais 🎳 pour un centre de loisirs, parc de jeux ou amusement center. Jamais 🎡 pour château, site naturel ou musée. Jamais 📍 ou 🗺️ pour un lieu culturel ou patrimonial.
-16. whatToBring : JAMAIS "Bonne humeur", "Appétit", "Monnaie" (seul), "Tenue confortable". Utilise : "Porte-monnaie", "Petite faim", "Eau", "Petite veste", "Chaussettes".
-17. type : bowling/café/boulangerie/pâtisserie/centre commercial/piscine/patinoire/escalade → "indoor" OBLIGATOIRE. Plage/lac/parc/zoo → "outdoor".
-18. practicalInfos : N'INVENTE JAMAIS "Réservation recommandée le week-end" ou "Parking gratuit" sans source explicite dans les données.
-19. tags : JAMAIS "lieu à découvrir", "tourist_attraction", "point_of_interest", "establishment" comme tag.
-
-Pour chaque lieu retenu, génère cet objet EXACTEMENT (ne supprime aucun champ) :
+Format de chaque objet (tous ces champs obligatoires) :
 {
-  "sourceId": "(sourceId exact du lieu, copié depuis la liste ci-dessus)",
-  "emoji": "(1 emoji pertinent)",
-  "titre": "(nom court du lieu)",
-  "subtitle": "(pour quel type de famille — différent de whyGoodIdea, 1 phrase max)",
-  "duree": "(durée suggérée, ex: 2h)",
-  "priceLabel": "(Gratuit, Prix à vérifier, ou prix estimé)",
-  "priceAmount": (0 si gratuit, null si inconnu, nombre si connu),
-  "type": "(outdoor|indoor|cultural|food|sport)",
-  "minAgeLabel": "(Dès X ans ou Tout âge)",
-  "category": "(Nature|Culture|Sport|Gastronomie|Loisirs)",
-  "mood": ["(1 à 3 parmi: calme, energique, creatif, social, aventure)"],
-  "weatherFit": ["(sunny|cloudy|rainy|any)"],
-  "reservationRequired": (true|false),
-  "icon": "(même emoji que le champ emoji)",
-  "colorTheme": "(UNIQUEMENT ces pastels: #E8F5E9 Nature, #FFF3E0 Culture, #E3F2FD Sport, #F3E5F5 Créatif, #F5F0FF Loisirs)",
-  "benefit": "(bénéfice principal en 5 mots max)",
-  "whyGoodIdea": "(phrase concrète et utile pour un parent — ex: 'Une sortie nature pour marcher et explorer un paysage spectaculaire.')",
+  "sourceId": "...",
+  "subtitle": "(pour quel type de famille, 1 phrase)",
+  "whyGoodIdea": "(phrase concrète pour un parent)",
+  "benefit": "(5 mots max)",
+  "duree": "(ex: 2h)",
+  "priceLabel": "(Gratuit | Prix à vérifier | prix estimé)",
+  "priceAmount": (0 si gratuit, null si inconnu),
+  "minAgeLabel": "(Dès X ans | Tout âge)",
   "effortLevel": "(Facile|Moyen|Aventure)",
-  "whatToBring": ["(2 à 4 items pratiques)"],
-  "practicalInfos": ["(2 à 3 infos pratiques — si isOpen connu utilise-le, sinon 'Horaires à vérifier avant de partir')"],
-  "tags": ["(3 à 5 tags courts)"],
-  "weatherReason": "(phrase TRÈS courte avec emoji — MAXIMUM 32 caractères — ex: '☀️ Idéal avec ce soleil', '🌧️ À l\'abri', '🥶 Sortie courte', '🌿 Prendre l\'air', '🌤️ Flexible aujourd\'hui', '❄️ Au frais'. Obligatoire.)"
+  "mood": ["(calme|energique|creatif|social|aventure)"],
+  "weatherFit": ["(sunny|cloudy|rainy|any)"],
+  "weatherReason": "(≤32 chars avec emoji)",
+  "whatToBring": ["(2-4 items pratiques)"],
+  "practicalInfos": ["(2-3 infos distinctes, jamais de durée de trajet)"]
 }`;
 }
 
@@ -756,6 +782,15 @@ app.post('/generer-activites', async (req, res) => {
   if (!GOOGLE_PLACES_API_KEY) {
     console.warn('[backend] GOOGLE_PLACES_API_KEY absente — réponse vide');
     if (!res.headersSent) res.json([]); return;
+  }
+
+  // 2b. Cache check — retourner immédiatement si même zone/météo/groupe déjà enrichi
+  const excludeArr = Array.isArray(exclude) ? exclude : [];
+  const cacheKey = getCacheKey(latitude, longitude, weatherIntent, radiusMeters, searchGroup, excludeArr);
+  const cachedResult = getCached(cacheKey);
+  if (cachedResult) {
+    console.log(`[cache] HIT (${cachedResult.length} activités) — ${cacheKey.substring(0, 40)}`);
+    return res.json(cachedResult);
   }
 
   // Outer scope so the safety timer can fall back to real places if Claude hangs
@@ -864,9 +899,16 @@ app.post('/generer-activites', async (req, res) => {
 
     // 5. Claude / OpenRouter
     let enrichedActivities;
+    const useOpenRouter = OPENROUTER_ENABLED && !isBudgetExceeded();
+    if (!useOpenRouter) {
+      console.log(`[backend] OpenRouter désactivé (ENABLED=${OPENROUTER_ENABLED}, budgetOK=${!isBudgetExceeded()}) — fallback local`);
+      enrichedActivities = placesToFallback(candidates, latitude, longitude, weatherIntent);
+    } else {
     try {
-      const prompt = buildClaudePrompt(candidates, { latitude, longitude, weather, weatherCondition, weatherTemp, weatherIntent, filters, exclude });
-      console.log(`[backend] envoi Claude avec ${candidates.length} lieux réels`);
+      const prompt = buildClaudePrompt(candidates, { weatherCondition, weatherTemp, weatherIntent });
+      const promptTokensEst = Math.round(prompt.length / 4);
+      console.log(`[cost] Appel OpenRouter — modèle=${OPENROUTER_MODEL} candidats=${candidates.length} prompt≈${promptTokensEst} tokens`);
+      const t0 = Date.now();
 
       const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -875,8 +917,8 @@ app.post('/generer-activites', async (req, res) => {
           'Authorization': `Bearer ${OPENROUTER_KEY}`,
         },
         body: JSON.stringify({
-          model: 'anthropic/claude-sonnet-4-5',
-          temperature: 0.3, // lower = more reliable JSON + less hallucination
+          model: OPENROUTER_MODEL,
+          temperature: 0.3,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
@@ -887,6 +929,19 @@ app.post('/generer-activites', async (req, res) => {
       }
 
       const openRouterData = await openRouterRes.json();
+
+      // Logs coût
+      const usage = openRouterData.usage;
+      if (usage) {
+        const inTok = usage.prompt_tokens || 0;
+        const outTok = usage.completion_tokens || 0;
+        const costUSD = (inTok * 3 + outTok * 15) / 1_000_000;
+        trackSpend(costUSD);
+        console.log(`[cost] ${inTok} in + ${outTok} out tokens | ~$${costUSD.toFixed(4)} | ${Date.now() - t0}ms`);
+      } else {
+        console.log(`[cost] Réponse OpenRouter sans usage (${Date.now() - t0}ms)`);
+      }
+
       const texte = openRouterData.choices?.[0]?.message?.content ?? '';
       console.log('[backend] Claude raw (200c):', texte.slice(0, 200));
 
@@ -906,8 +961,16 @@ app.post('/generer-activites', async (req, res) => {
       console.error('[backend] Claude échoue:', claudeErr.message, '→ fallback lieux Google bruts');
       enrichedActivities = placesToFallback(candidates, latitude, longitude, weatherIntent);
     }
+    } // end else (useOpenRouter)
 
-    sendNearbyActivities(res, enrichedActivities);
+    // Normaliser, valider, mettre en cache et envoyer
+    const finalActivities = (Array.isArray(enrichedActivities) ? enrichedActivities : [])
+      .map(normalizeActivityForDisplay)
+      .filter(Boolean)
+      .filter(validateNearbyActivity);
+    console.log(`[quality] ${finalActivities.length}/${enrichedActivities?.length ?? 0} activités passent la validation`);
+    setCache(cacheKey, finalActivities);
+    if (!res.headersSent) res.json(finalActivities);
 
   } catch (e) {
     console.error('[backend] Erreur globale /generer-activites:', e.message);
