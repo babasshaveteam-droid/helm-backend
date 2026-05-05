@@ -841,23 +841,42 @@ app.post('/generer-activites', async (req, res) => {
     const normalized = rawPlaces.map(normalizePlace);
     let deduped = deduplicate(normalized).filter(isFamilyPlace);
 
-    // 4a. Recherche ciblée par mots-clés pour familles sans type Google Places dédié
-    // searchGroup 1 → escalade/climbing/trampoline ; searchGroup 2 → ferme pédagogique/parc animalier
-    const TARGETED_QUERIES = {
-      1: 'salle escalade climbing bloc trampoline',
-      2: 'ferme pédagogique parc animalier',
-    };
-    if (TARGETED_QUERIES[searchGroup] && !weatherIntent) {
+    // 4a. Recherches ciblées météo-aware — max 2 queries par requête
+    function getTargetedSearches(sg, wi) {
+      if (wi === 'rainy' || wi === 'cold') {
+        return [
+          'ludothèque bibliothèque jeunesse enfants',
+          'salle escalade climbing trampoline',
+        ];
+      }
+      if (wi === 'sunny') {
+        return [
+          'ferme pédagogique parc animalier zoo',
+          'forêt balade jardin famille',
+        ];
+      }
+      if (wi === 'hot') {
+        return ['piscine plage lac baignade aquarium'];
+      }
+      const byGroup = {
+        1: 'salle escalade climbing bloc trampoline',
+        2: 'ferme pédagogique parc animalier',
+        3: 'forêt balade jardin botanique sentier',
+      };
+      return byGroup[sg] ? [byGroup[sg]] : [];
+    }
+    const targetedSearches = getTargetedSearches(searchGroup, weatherIntent);
+    for (const query of targetedSearches) {
       try {
         const targeted = await fetchTargetedSearch(
           latitude, longitude, radiusMeters,
-          GOOGLE_PLACES_API_KEY, TARGETED_QUERIES[searchGroup], 10
+          GOOGLE_PLACES_API_KEY, query, 8
         );
-        console.log(`[backend] Ciblée "${TARGETED_QUERIES[searchGroup]}": ${targeted.length} résultats`);
+        console.log(`[targeted] "${query}": ${targeted.length} résultats`);
         const targetedNorm = targeted.map(normalizePlace).filter(isFamilyPlace);
         deduped = deduplicate([...deduped, ...targetedNorm]);
       } catch (e) {
-        console.warn('[backend] Recherche ciblée échoue (non bloquant):', e.message);
+        console.warn('[targeted] Recherche ciblée échoue:', e.message);
       }
     }
 
@@ -894,6 +913,14 @@ app.post('/generer-activites', async (req, res) => {
       }
     }
 
+    // Trier par distance croissante — activités les plus proches en premier
+    fresh.sort((a, b) => {
+      const dA = (a.lat != null && a.lon != null) ? haversineKm(latitude, longitude, a.lat, a.lon) : 999;
+      const dB = (b.lat != null && b.lon != null) ? haversineKm(latitude, longitude, b.lat, b.lon) : 999;
+      return dA - dB;
+    });
+    console.log(`[proximity] Candidats triés: ${fresh.slice(0, 3).map(p => p.name + ' (' + (p.lat != null ? haversineKm(latitude, longitude, p.lat, p.lon).toFixed(1) : '?') + 'km)').join(', ')}`);
+
     candidates = fresh.slice(0, 8);
     if (!candidates.length) {
       // All nearby places are excluded — serve raw fallback without exclusion
@@ -901,6 +928,17 @@ app.post('/generer-activites', async (req, res) => {
       console.warn('[backend] Tous les lieux exclus — fallback pool complet');
     }
     console.log(`[backend] ${candidates.length} lieux candidats (${excludeSet.size} exclus)`);
+
+    // Logs couverture familles
+    const allTypes = candidates.flatMap(c => c.types ?? []);
+    const allNames = candidates.map(c => c.name.toLowerCase()).join(' ');
+    if (!allTypes.some(t => ['zoo', 'aquarium'].includes(t)) && !/ferme|animalier|papiliorama/.test(allNames))
+      console.log('[coverage] ⚠️ Aucun zoo/aquarium/ferme dans les candidats');
+    if (!allTypes.includes('library') && !/biblioth[eè]que|ludoth[eè]que/.test(allNames))
+      console.log('[coverage] ⚠️ Aucune bibliothèque/ludothèque dans les candidats');
+    if (!allTypes.some(t => ['park', 'natural_feature', 'botanical_garden', 'nature_reserve'].includes(t)) && !/for[eê]t|jardin/.test(allNames))
+      console.log('[coverage] ⚠️ Aucun parc/forêt/nature dans les candidats');
+    console.log(`[coverage] Types: ${[...new Set(allTypes)].join(', ')}`);
 
     // 4.5. Routes API — attach real driving times (non-blocking, 5s timeout)
     candidates = await fetchTravelTimes(latitude, longitude, candidates, GOOGLE_PLACES_API_KEY);
