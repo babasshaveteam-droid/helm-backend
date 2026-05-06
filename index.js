@@ -4,6 +4,7 @@ const { fetchNearbyPlaces, fetchTargetedSearch } = require('./places');
 const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
 const { applyFamilyRules } = require('./activityRules');
+const { resolveActivityEmoji, resolveAll } = require('./iconResolver');
 
 const app = express();
 app.use(cors());
@@ -413,11 +414,7 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon, weatherInte
                    || guessCategory(place.types)
                    || 'Loisirs';
 
-  const emojiOverride = getEmojiOverride(place.types, place.name);
-  const rawEmoji      = emojiOverride || claudeItem.emoji || typeEmoji(place.types);
-  const emoji = (category === 'Culture' && (rawEmoji === '🗺️' || rawEmoji === '📍'))
-    ? '🏛️'
-    : rawEmoji;
+  const emoji = '✨';  // provisoire — écrasé par resolveAll après merge
 
   const colorTheme = safeColorTheme(claudeItem.colorTheme, category);
 
@@ -514,7 +511,8 @@ function placesToFallback(places, userLat, userLon, weatherIntent) {
       p.lat != null && p.lon != null && userLat != null && userLon != null
         ? haversineKm(userLat, userLon, p.lat, p.lon)
         : null;
-    const emoji    = getEmojiOverride(p.types, p.name) || typeEmoji(p.types);
+    const emojiResult = resolveActivityEmoji(p);
+    const emoji    = emojiResult.icon;
     const category = determineCategoryOverride(p.types, p.name) || guessCategory(p.types);
     const subtitle = SUBTITLE_BY_CATEGORY[category] ?? 'Idéal pour une sortie en famille.';
 
@@ -563,7 +561,8 @@ function placesToFallback(places, userLat, userLon, weatherIntent) {
       sourceId: p.sourceId,
     };
 
-    return applyFamilyRules(base, p.name, p.types, { fromFallback: true, isOpen: p.isOpen });
+    const afterRules = applyFamilyRules(base, p.name, p.types, { fromFallback: true, isOpen: p.isOpen });
+    return resolveAll(afterRules, p);
   });
 }
 
@@ -598,26 +597,34 @@ function semanticDedupInfos(infos) {
   let horaireAdded = false;
   const seen = new Set();
   const result = [];
-  for (const raw of infos) {
+  for (const item of infos) {
+    const raw  = typeof item === 'string' ? item : item.text;
+    const icon = typeof item === 'object' ? item.icon : '✨';
     const isHoraire = HORAIRE_NORMALIZE_RE.test(raw);
-    const entry = isHoraire ? 'Horaires à vérifier avant de partir' : raw;
-    const key = entry.toLowerCase().trim();
+    const text = isHoraire ? 'Horaires à vérifier avant de partir' : raw;
+    const key  = text.toLowerCase().trim();
     if (seen.has(key)) continue;
     seen.add(key);
     if (isHoraire && horaireAdded) continue;
     if (isHoraire) horaireAdded = true;
-    result.push(entry);
+    result.push({ text, icon });
   }
   return result;
 }
 
 function normalizeActivityForDisplay(activity) {
   if (!activity) return null;
-  let infos = (activity.practicalInfos ?? [])
-    .map(normalizeInfoText)
-    .filter(text => text.length > 0);
+  let infos = (activity.practicalInfos ?? []).map(item => {
+    const rawText = typeof item === 'string' ? item : item.text;
+    const icon    = typeof item === 'object' ? item.icon : '✨';
+    const normalized = normalizeInfoText(rawText);
+    return normalized ? { text: normalized, icon } : null;
+  }).filter(Boolean);
   if (activity.travelTimeLabel) {
-    infos = infos.map(stripConflictingTravelTime).filter(Boolean);
+    infos = infos.map(item => {
+      const stripped = stripConflictingTravelTime(item.text);
+      return stripped ? { ...item, text: stripped } : null;
+    }).filter(Boolean);
   }
   return { ...activity, practicalInfos: semanticDedupInfos(infos) };
 }
@@ -999,7 +1006,12 @@ app.post('/generer-activites', async (req, res) => {
 
       // 6. Merge: discard any item whose sourceId is not in placesMap (hallucination guard)
       enrichedActivities = claudeItems
-        .map(item => mergeWithPlaceData(item, placesMap, latitude, longitude, weatherIntent))
+        .map(item => {
+          const merged = mergeWithPlaceData(item, placesMap, latitude, longitude, weatherIntent);
+          if (!merged) return null;
+          const place = placesMap.get(item.sourceId);
+          return resolveAll(merged, place);
+        })
         .filter(Boolean);
 
       if (!enrichedActivities.length) throw new Error('Aucune activité valide après merge');
