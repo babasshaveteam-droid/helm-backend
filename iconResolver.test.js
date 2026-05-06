@@ -129,6 +129,10 @@ test('practicalInfo: Cafétéria sur place → ☕', () =>
   assert.strictEqual(resolveIcon('Cafétéria sur place', 'practicalInfo').icon, '☕'));
 test('practicalInfo: Sur place seul → ✨ (pas 🍽️)', () =>
   assert.strictEqual(resolveIcon('Sur place', 'practicalInfo').icon, '✨'));
+test('practicalInfo: Restaurants et cafés intérieurs → pas ✨', () =>
+  assert.notStrictEqual(resolveIcon('Restaurants et cafés intérieurs', 'practicalInfo').icon, '✨'));
+test('practicalInfo: Restaurants disponibles → 🍽️', () =>
+  assert.strictEqual(resolveIcon('Restaurants disponibles', 'practicalInfo').icon, '🍽️'));
 test('practicalInfo: Boutique souvenirs → 🛍️', () =>
   assert.strictEqual(resolveIcon('Boutique souvenirs', 'practicalInfo').icon, '🛍️'));
 test('practicalInfo: Vitrines interactives → 🖼️', () =>

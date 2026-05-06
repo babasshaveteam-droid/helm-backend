@@ -225,12 +225,12 @@ const ICON_INTENTS = [
   // 12. Restauration — SANS "sur place" seul (trop générique → ✨)
   {
     id: 'cafeteria', icon: '☕',
-    patterns: [/cafeteria/, /\bcafe\b/, /\bboulangerie\b/, /\bpatisserie\b/, /\bgouter\b/],
+    patterns: [/cafeteria/, /\bcafes?\b/, /\bboulangerie\b/, /\bpatisserie\b/, /\bgouter\b/],
     contexts: ['practicalInfo'], confidence: 'high',
   },
   {
     id: 'restaurant', icon: '🍽️',
-    patterns: [/\bsnack\b/, /\brestauration\b/, /\brestaurant\b/, /\bbuvette\b/, /fondue/, /\brepas\b/],
+    patterns: [/\bsnack\b/, /\brestauration\b/, /\brestaurants?\b/, /\bbuvette\b/, /fondue/, /\brepas\b/],
     contexts: ['practicalInfo'], confidence: 'high',
   },
   {
