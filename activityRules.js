@@ -96,6 +96,25 @@ const FAMILIES = {
     forbiddenTags: ["parc d'attractions", 'lieu à découvrir', 'attraction'],
   },
 
+  cinema: {
+    detect: (name, types) =>
+      types.includes('movie_theater') || /cin[ée]ma|cin[ée]plex/i.test(name),
+    category:    'Loisirs',
+    type:        'indoor',
+    icon:        '🎬',
+    effortLevel: 'Facile',
+    weatherFit:  ['rainy', 'cold', 'unstable'],
+    subtitle:    "Une séance de cinéma pour se détendre en famille à l'abri.",
+    whyGoodIdea: "Le cinéma est idéal quand il fait mauvais — les enfants adorent le grand écran.",
+    benefit:     "Divertissement à l'abri",
+    whatToBring: ['Porte-monnaie'],
+    practicalInfos: ['Séances à vérifier sur place ou en ligne', 'Tarifs réduits enfants souvent disponibles'],
+    tags:        ['cinéma', 'film', 'intérieur', 'famille', 'pluie'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [/réservation recommandée le week-end/i],
+    forbiddenTags: ['lieu à découvrir', 'attraction'],
+  },
+
   water: {
     detect: (name, types) =>
       types.includes('beach') ||

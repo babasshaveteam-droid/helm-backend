@@ -460,7 +460,7 @@ const ICON_INTENTS = [
   },
   {
     id: 'jacket', icon: '🧥',
-    patterns: [/\bveste\b/, /\bmanteau\b/, /vetements?\s+chauds/],
+    patterns: [/\bveste\b/, /\bmanteau\b/, /vetements?\s+chauds?/, /\bchaud\b/],
     contexts: ['bringItem'], confidence: 'medium',
   },
   {
@@ -524,6 +524,7 @@ const ACTIVITY_NAME_PATTERNS = [
   [/mini.golf|minigolf/i, '⛳'],
   [/skatepark|pumptrack/i, '🛹'],
   [/boulangerie|pâtisserie|pastry/i, '🥐'],
+  [/grotte|caverne|souterr/i, '🔦'],
   [/forêt|forest|bois\b/i, '🌲'],
   [/plage|beach|baignade/i, '🏖️'],
   [/\blac\b|lake|étang/i, '🌊'],

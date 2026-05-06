@@ -93,6 +93,10 @@ test('bringItem: Casque → 🪖', () =>
   assert.strictEqual(resolveIcon('Casque', 'bringItem').icon, '🪖'));
 test('bringItem: Carte de bibliothèque → 💳', () =>
   assert.strictEqual(resolveIcon('Carte de bibliothèque', 'bringItem').icon, '💳'));
+test('bringItem: Vêtement chaud → 🧥', () =>
+  assert.strictEqual(resolveIcon('Vêtement chaud', 'bringItem').icon, '🧥'));
+test('bringItem: Vêtements chauds → 🧥', () =>
+  assert.strictEqual(resolveIcon('Vêtements chauds', 'bringItem').icon, '🧥'));
 test('bringItem: Sac à dos → 🎒', () =>
   assert.strictEqual(resolveIcon('Sac à dos', 'bringItem').icon, '🎒'));
 test('bringItem: unknown → ✨ (pas 🎒 par défaut)', () =>

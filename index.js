@@ -638,6 +638,7 @@ const HIGH_VALUE_LONG_DISTANCE = new Set([
   'zoo', 'aquarium', 'museum', 'art_gallery', 'amusement_center', 'amusement_park',
   'bowling_alley', 'swimming_pool', 'ice_skating_rink', 'library',
   'historic_site', 'castle', 'botanical_garden', 'tourist_attraction', 'natural_feature',
+  'movie_theater',
 ]);
 
 function sendActivities(res, activities) {
@@ -854,6 +855,7 @@ app.post('/generer-activites', async (req, res) => {
         return [
           'ludothèque bibliothèque jeunesse enfants',
           'salle escalade climbing trampoline',
+          'cinéma ciné film enfants famille',
         ];
       }
       if (wi === 'sunny') {
@@ -866,8 +868,9 @@ app.post('/generer-activites', async (req, res) => {
         return ['piscine plage lac baignade aquarium'];
       }
       const byGroup = {
+        0: 'musée exposition grotte caverne souterrain',
         1: 'salle escalade climbing bloc trampoline',
-        2: 'ferme pédagogique parc animalier',
+        2: 'ferme pédagogique parc animalier cinéma bowling',
         3: 'forêt balade jardin botanique sentier',
       };
       return byGroup[sg] ? [byGroup[sg]] : [];

@@ -1,7 +1,7 @@
 // Rotate through different type groups on each refresh to surface varied places
 const SEARCH_GROUPS = [
-  ['park', 'museum', 'library', 'tourist_attraction', 'bowling_alley'],            // groupe 0 — bowling dès le départ
-  ['park', 'art_gallery', 'museum', 'tourist_attraction', 'amusement_center', 'gym'], // groupe 1 — gym = escalade/trampoline
+  ['park', 'museum', 'library', 'tourist_attraction', 'movie_theater', 'bowling_alley'], // groupe 0
+  ['park', 'art_gallery', 'museum', 'tourist_attraction', 'amusement_center', 'movie_theater'], // groupe 1 — gym retiré, cinéma ajouté
   ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'museum', 'library'],     // groupe 2 — sport indoor
   ['zoo', 'aquarium', 'park', 'tourist_attraction', 'museum'],                      // groupe 3 — animaux
 ];
