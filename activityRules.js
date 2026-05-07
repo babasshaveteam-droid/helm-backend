@@ -1,3 +1,4 @@
+// Règles officielles : docs/HELM_CORE_RULES.md
 'use strict';
 
 // ─── activityRules.js ─────────────────────────────────────────────────────────
@@ -18,15 +19,29 @@
 // Items that must NEVER appear in whatToBring, regardless of family.
 // Keys are lowercase normalized.
 const GLOBAL_FORBIDDEN_BRING = {
-  'bonne humeur':   null,           // remove
-  'appétit':        null,           // remove (except bakery uses 'Petite faim')
-  'monnaie':        'Porte-monnaie',// replace
-  'monnaie pour les entrées': 'Porte-monnaie',
-  'tenue confortable': null,        // remove
-  'motivation':     null,
-  'envie':          null,
-  'sourire':        null,
-  'enthousiasme':   null,
+  'bonne humeur':              null,
+  'appétit':                   null,
+  'monnaie':                   'Porte-monnaie',
+  'monnaie pour les entrées':  'Porte-monnaie',
+  'tenue confortable':         null,
+  'motivation':                null,
+  'envie':                     null,
+  'sourire':                   null,
+  'enthousiasme':              null,
+  // abstractions interdites
+  'patience':                  null,
+  'patience (service variable)': null,
+  'patience (attente possible)': null,
+  'temps':                     null,
+  'flexibilité':               null,
+  'flexibilite':               null,
+  'organisation':              null,
+  's\'organiser':              null,
+  'réservation':               null,
+  'reservation':               null,
+  'horaires':                  null,
+  'curiosité':                 null,
+  'curiosite':                 null,
 };
 
 // practicalInfos patterns that must never appear without a real source.
@@ -455,6 +470,56 @@ function applyFamilyRules(activity, placeName = '', placeTypes = [], opts = {}) 
   return a;
 }
 
+// ─── Indoor / Outdoor normalization ─────────────────────────────────────────
+// Called AFTER applyFamilyRules. Corrects type = 'outdoor' when semantic
+// signals (weatherReason, Google types, name keywords) clearly indicate indoor.
+// This is the single source of truth for the environment chip.
+
+const INDOOR_GOOGLE_TYPES = new Set([
+  'museum', 'aquarium', 'restaurant', 'cafe', 'shopping_mall', 'library',
+  'bowling_alley', 'movie_theater', 'art_gallery', 'ice_skating_rink',
+  'swimming_pool', 'amusement_center', 'night_club', 'bar', 'food',
+]);
+
+const INDOOR_NAME_RE = /musée|museum|aquarium|vivarium|chocolaterie|bibliothèque|ludothèque|médiathèque|cinéma|bowling|patinoire|piscine\s+couverte|chaplin|cailler|café.{0,4}restaurant|hôtel.{0,20}café|restaurant|arena|bâtiment\s+historique|salle\s+de\s+(?:spectacle|concert|jeux|sport)/i;
+
+const INDOOR_TEXT_RE = /couvert[e]?|à\s+l['']abri|à\s+l['']intérieur|visite\s+(?:guidée?\s+)?couverte|espace\s+(?:couvert|intérieur|chauffé)/i;
+
+function normalizeIndoorOutdoor(activity, place) {
+  if (activity.type === 'indoor') return activity; // déjà correct
+
+  const a = { ...activity };
+  let reason = null;
+
+  // Priorité 1 — weatherReason contient "Intérieur"
+  if (!reason && /int[eé]rieur/i.test(a.weatherReason)) {
+    reason = 'weatherReason_interieur';
+  }
+
+  // Priorité 2 — types Google
+  if (!reason && Array.isArray(place?.types) && place.types.some(t => INDOOR_GOOGLE_TYPES.has(t))) {
+    reason = `google_type:${place.types.find(t => INDOOR_GOOGLE_TYPES.has(t))}`;
+  }
+
+  // Priorité 3 — nom du lieu
+  if (!reason && INDOOR_NAME_RE.test(place?.name ?? '')) {
+    reason = 'name_keyword';
+  }
+
+  // Priorité 4 — texte descriptif (whyGoodIdea, description, subtitle)
+  if (!reason) {
+    const text = [a.whyGoodIdea, a.description, a.subtitle].filter(Boolean).join(' ');
+    if (INDOOR_TEXT_RE.test(text)) reason = 'description_text';
+  }
+
+  if (reason) {
+    console.log(`[environment] corrected outdoor_to_indoor reason=${reason} place="${place?.name ?? '?'}"`);
+    a.type = 'indoor';
+  }
+
+  return a;
+}
+
 module.exports = {
   detectFamily,
   getFamilyRule,
@@ -462,4 +527,5 @@ module.exports = {
   sanitizePracticalInfos,
   sanitizeTags,
   applyFamilyRules,
+  normalizeIndoorOutdoor,
 };

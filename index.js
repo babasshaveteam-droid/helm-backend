@@ -1,9 +1,10 @@
+// Règles officielles : docs/HELM_CORE_RULES.md
 const express = require('express');
 const cors = require('cors');
 const { fetchNearbyPlaces, fetchTargetedSearch } = require('./places');
 const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
-const { applyFamilyRules } = require('./activityRules');
+const { applyFamilyRules, normalizeIndoorOutdoor } = require('./activityRules');
 const { resolveActivityEmoji, resolveAll } = require('./iconResolver');
 
 const app = express();
@@ -443,6 +444,7 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon, weatherInte
     : (isHeritageSite(place.name, place.types)
         ? HERITAGE_WHAT_TO_BRING
         : (WHAT_TO_BRING_DEFAULTS[category] ?? WHAT_TO_BRING_DEFAULTS.Loisirs));
+  console.log(`[pipeline] clean_bring_items before=${rawWhatToBring.length} after=${whatToBring.length} place="${place.name}"`);
 
   let practicalInfos;
   if (rawPractical.length > 0) {
@@ -500,7 +502,8 @@ function mergeWithPlaceData(claudeItem, placesMap, userLat, userLon, weatherInte
     sourceId: place.sourceId,
   };
 
-  return applyFamilyRules(result, place.name, place.types, { fromFallback: false, isOpen: place.isOpen });
+  const afterFamily = applyFamilyRules(result, place.name, place.types, { fromFallback: false, isOpen: place.isOpen });
+  return normalizeIndoorOutdoor(afterFamily, place);
 }
 
 // ─── Fallback: Google places → minimal Activity (Claude unavailable) ───────────

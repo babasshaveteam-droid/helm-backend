@@ -1,3 +1,4 @@
+// Règles officielles : docs/HELM_CORE_RULES.md
 const MOCK_ACTIVITIES = [
   {
     id: 'mock-1',

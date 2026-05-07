@@ -1,3 +1,4 @@
+// Règles officielles : docs/HELM_CORE_RULES.md
 'use strict';
 
 // ─── Text normalization ──────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ function normalizeText(text) {
 // ─── Abstract item detection ─────────────────────────────────────────────────
 // Only exact normalized stems qualify — "Petit carnet de curiosités" is NOT abstract
 const ABSTRACT_STEMS = [
-  /^patience$/,
+  /^patience\b/,          // "patience" et "patience (service variable)"
   /^bonne humeur$/,
   /^motivation$/,
   /^envie$/,
@@ -26,6 +27,8 @@ const ABSTRACT_STEMS = [
   /^enthousiasme$/,
   /^sourire$/,
   /^bonne volonte$/,
+  /^organisation$/,
+  /^reservations?$/,
 ];
 
 function isAbstractItem(text) {
@@ -56,7 +59,14 @@ const ICON_INTENTS = [
     contexts: ['practicalInfo'], confidence: 'high',
   },
 
-  // 3. Accessibilité — après toilets
+  // 3. Ascenseur — avant wheelchair pour éviter overlap
+  {
+    id: 'elevator', icon: '🛗',
+    patterns: [/ascenseur/, /elevator/],
+    contexts: ['practicalInfo'], confidence: 'high',
+  },
+
+  // 3b. Accessibilité — après toilets
   {
     id: 'wheelchair', icon: '♿',
     patterns: [/fauteuil\s+roulant/, /\bpmr\b/, /mobilite\s+reduite/],
@@ -225,7 +235,7 @@ const ICON_INTENTS = [
   // 12. Restauration — SANS "sur place" seul (trop générique → ✨)
   {
     id: 'cafeteria', icon: '☕',
-    patterns: [/cafeteria/, /\bcafes?\b/, /\bboulangerie\b/, /\bpatisserie\b/, /\bgouter\b/],
+    patterns: [/cafeteria/, /\bcafes?\b/, /\bbar\b/, /\bboulangerie\b/, /\bpatisserie\b/, /\bgouter\b/],
     contexts: ['practicalInfo'], confidence: 'high',
   },
   {
@@ -258,8 +268,18 @@ const ICON_INTENTS = [
     contexts: ['practicalInfo'], confidence: 'high',
   },
   {
+    id: 'audioguide_info', icon: '🎧',
+    patterns: [/audioguide/, /guide\s+audio/, /visite\s+audio/],
+    contexts: ['practicalInfo'], confidence: 'high',
+  },
+  {
+    id: 'chocolate_shop', icon: '🍫',
+    patterns: [/chocolaterie/, /boutique\s+de\s+chocolats?/],
+    contexts: ['practicalInfo'], confidence: 'high',
+  },
+  {
     id: 'guided_tour', icon: '🎟️',
-    patterns: [/visite\s+(?:libre|guidee?|gratuite?)/],
+    patterns: [/visite\s+(?:libre|guidee?|gratuite?)/, /audioguide\s+disponible/],
     contexts: ['practicalInfo'], confidence: 'high',
   },
   {
@@ -355,8 +375,8 @@ const ICON_INTENTS = [
 
   {
     id: 'wallet', icon: '👛',
-    patterns: [/portefeuille/, /porte.?monnaie/],
-    contexts: ['bringItem'], confidence: 'high',
+    patterns: [/portefeuille/, /porte.?monnaie/, /carte\s+bancaire/, /\bpaiement\b/],
+    contexts: ['bringItem', 'practicalInfo'], confidence: 'high',
   },
   {
     id: 'swimsuit', icon: '🩱',
@@ -415,7 +435,7 @@ const ICON_INTENTS = [
   },
   {
     id: 'notepad', icon: '📓',
-    patterns: [/\bcarnet\b/],
+    patterns: [/\bcarnet\b/, /\bcahier\b/, /cahier\s+de\s+notes?/, /bloc.?notes?/],
     contexts: ['bringItem'], confidence: 'medium',
   },
   {
@@ -495,12 +515,33 @@ const ICON_INTENTS = [
   },
   {
     id: 'bag', icon: '🎒',
-    patterns: [/sac\s+a\s+dos/, /bagage/],
+    patterns: [/sac\s+a\s+dos/, /petit\s+sac/, /sac\s+reutilisable/, /bagage/],
     contexts: ['bringItem'], confidence: 'medium',
   },
   {
     id: 'picnic', icon: '🧺',
     patterns: [/pique.nique/, /\bpanier\b/],
+    contexts: ['bringItem'], confidence: 'high',
+  },
+
+  // ── Hygiène ────────────────────────────────────────────────────────────────
+  {
+    id: 'tissues', icon: '🧻',
+    patterns: [/mouchoirs?/, /kleenex/],
+    contexts: ['bringItem'], confidence: 'high',
+  },
+
+  // ── Audio / visite ─────────────────────────────────────────────────────────
+  {
+    id: 'audioguide_bring', icon: '🎧',
+    patterns: [/audioguide/, /guide\s+audio/, /casque\s+audio/],
+    contexts: ['bringItem'], confidence: 'high',
+  },
+
+  // ── Chocolats / boutique ───────────────────────────────────────────────────
+  {
+    id: 'chocolate_bring', icon: '🍫',
+    patterns: [/chocolats?/, /boutique\s+de\s+chocolat/],
     contexts: ['bringItem'], confidence: 'high',
   },
 ];

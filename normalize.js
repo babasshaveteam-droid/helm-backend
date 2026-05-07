@@ -1,3 +1,4 @@
+// Règles officielles : docs/HELM_CORE_RULES.md
 // Adapts the Places API (New) v1 response format.
 // Fields: id, displayName.text, formattedAddress, location.{latitude,longitude},
 //         types, rating, userRatingCount, currentOpeningHours.openNow

@@ -1,3 +1,4 @@
+// Règles officielles : docs/HELM_CORE_RULES.md
 // Rotate through different type groups on each refresh to surface varied places
 const SEARCH_GROUPS = [
   ['park', 'museum', 'library', 'tourist_attraction', 'movie_theater', 'bowling_alley'], // groupe 0
