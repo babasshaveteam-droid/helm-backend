@@ -10,7 +10,13 @@ const SEARCH_GROUPS = [
 // Weather-intent-specific place types — override SEARCH_GROUPS when weatherIntent is set
 const WEATHER_TYPES = {
   rainy:    ['museum', 'library', 'bowling_alley', 'movie_theater', 'aquarium', 'amusement_center', 'shopping_mall', 'swimming_pool', 'ice_skating_rink', 'gym'],
-  cold:     ['museum', 'library', 'movie_theater', 'bowling_alley', 'aquarium', 'cafe', 'swimming_pool', 'ice_skating_rink', 'gym'],
+  cold: [
+    // indoor / au chaud — priorité
+    'museum', 'library', 'movie_theater', 'bowling_alley', 'aquarium',
+    'cafe', 'swimming_pool', 'ice_skating_rink', 'gym',
+    // outdoor court/familial autorisé par froid raisonnable
+    'park', 'tourist_attraction', 'zoo',
+  ],
   hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool'],
   unstable: ['museum', 'library', 'cafe', 'bowling_alley', 'shopping_mall', 'park', 'swimming_pool', 'ice_skating_rink', 'gym'],
   sunny:    ['park', 'zoo', 'aquarium', 'tourist_attraction', 'botanical_garden', 'amusement_park'],
@@ -29,9 +35,16 @@ const FIELD_MASK = [
 ].join(',');
 
 async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0, weatherIntent = null) {
-  const types = (weatherIntent && WEATHER_TYPES[weatherIntent])
-    ? WEATHER_TYPES[weatherIntent]
-    : SEARCH_GROUPS[searchGroup % SEARCH_GROUPS.length];
+  let types;
+  if (weatherIntent === 'cold' && searchGroup >= 2) {
+    const sgTypes = SEARCH_GROUPS[searchGroup % SEARCH_GROUPS.length];
+    types = [...new Set([...WEATHER_TYPES.cold, ...sgTypes])];
+    console.log(`[places] cold_merged searchGroup=${searchGroup} types(${types.length})=${types.join(',')}`);
+  } else if (weatherIntent && WEATHER_TYPES[weatherIntent]) {
+    types = WEATHER_TYPES[weatherIntent];
+  } else {
+    types = SEARCH_GROUPS[searchGroup % SEARCH_GROUPS.length];
+  }
   const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
     method: 'POST',
     headers: {

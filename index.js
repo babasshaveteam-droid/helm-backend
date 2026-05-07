@@ -705,7 +705,7 @@ function getWeatherIntent(weatherCondition, weatherTemp) {
 const WEATHER_INSTRUCTIONS = {
   rainy:    'La météo est pluvieuse. Priorise les activités couvertes, proches, simples et adaptées aux enfants. Évite les randonnées, parcs et longues sorties extérieures.',
   sunny:    'La météo est agréable. Priorise les sorties extérieures, nature, animaux et balades faciles. Les activités en plein air sont idéales.',
-  cold:     'Il fait froid. Priorise les activités intérieures, proches, courtes ou avec possibilité de pause au chaud.',
+  cold:     'Il fait froid. Priorise les activités intérieures ou au chaud. Tu peux aussi proposer une activité extérieure courte, proche, facile et familiale si la météo n\'est pas dangereuse. Évite les longues sorties dehors ou les lieux trop exposés.',
   hot:      'Il fait chaud. Priorise les lieux frais, ombragés, avec eau ou indoor. Évite les activités physiques longues.',
   unstable: 'La météo est instable. Priorise les activités flexibles, proches, couvertes ou faciles à écourter.',
 };
@@ -854,11 +854,19 @@ app.post('/generer-activites', async (req, res) => {
 
     // 4a. Recherches ciblées météo-aware — max 2 queries par requête
     function getTargetedSearches(sg, wi) {
-      if (wi === 'rainy' || wi === 'cold') {
+      if (wi === 'rainy') {
         return [
           'ludothèque bibliothèque jeunesse enfants',
           'salle escalade climbing trampoline',
           'cinéma ciné film enfants famille',
+        ];
+      }
+      if (wi === 'cold') {
+        return [
+          'ludothèque bibliothèque jeunesse enfants',
+          'salle escalade climbing trampoline',
+          'cinéma ciné film enfants famille',
+          'forêt promenade parc ferme point de vue famille',
         ];
       }
       if (wi === 'sunny') {
