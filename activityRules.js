@@ -192,9 +192,9 @@ const FAMILIES = {
 
   sport_indoor: {
     detect: (name, types) =>
-      types.includes('swimming_pool') ||
       types.includes('ice_skating_rink') ||
-      /piscine|centre\s+aquatique|patinoire|ice\s*skat|escalade|climbing\s*(gym|center|wall)|bloc\b/i.test(name),
+      (types.includes('swimming_pool') && /couverte?|couvert|indoor|int[eé]rieur/i.test(name)) ||
+      /piscine\s+couverte?|patinoire|ice\s*skat|escalade|climbing\s*(gym|center|wall)|bloc\b/i.test(name),
     category:    'Sport',
     type:        'indoor',
     icon:        null, // 🏊 piscine / ⛸️ patinoire / 🧗 escalade via getEmojiOverride
@@ -478,7 +478,7 @@ function applyFamilyRules(activity, placeName = '', placeTypes = [], opts = {}) 
 const INDOOR_GOOGLE_TYPES = new Set([
   'museum', 'aquarium', 'restaurant', 'cafe', 'shopping_mall', 'library',
   'bowling_alley', 'movie_theater', 'art_gallery', 'ice_skating_rink',
-  'swimming_pool', 'amusement_center', 'night_club', 'bar', 'food',
+  'amusement_center', 'night_club', 'bar', 'food',
 ]);
 
 const INDOOR_NAME_RE = /musée|museum|aquarium|vivarium|chocolaterie|bibliothèque|ludothèque|médiathèque|cinéma|bowling|patinoire|piscine\s+couverte|chaplin|cailler|café.{0,4}restaurant|hôtel.{0,20}café|restaurant|arena|bâtiment\s+historique|salle\s+de\s+(?:spectacle|concert|jeux|sport)/i;

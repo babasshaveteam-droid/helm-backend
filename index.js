@@ -645,6 +645,13 @@ const HIGH_VALUE_LONG_DISTANCE = new Set([
   'park',
 ]);
 
+function expandRadius(r) {
+  if (r <= 1000) return 5000;
+  if (r <= 3000) return 12000;
+  if (r <= 8000) return 25000;
+  return Math.min(Math.round(r * 1.5), 80000);
+}
+
 function sendActivities(res, activities) {
   if (res.headersSent) return;
   res.json(
@@ -785,6 +792,7 @@ app.post('/generer-activites', async (req, res) => {
     weatherTemp,
     filters,
     searchGroup = 0,
+    refreshCount = 0,
   } = req.body;
 
   const weatherIntent = getWeatherIntent(weatherCondition, weatherTemp);
@@ -810,7 +818,8 @@ app.post('/generer-activites', async (req, res) => {
   // 2b. Cache check — retourner immédiatement si même zone/météo/groupe déjà enrichi
   const excludeArr = Array.isArray(exclude) ? exclude : [];
   const cacheKey = getCacheKey(latitude, longitude, weatherIntent, radiusMeters, searchGroup, excludeArr);
-  console.log(`[refresh] radius=${radiusMeters} searchGroup=${searchGroup} excludeCount=${excludeArr.length}`);
+  console.log(`[refresh] count=${refreshCount} radius_used=${radiusMeters} searchGroup=${searchGroup} excludeCount=${excludeArr.length}`);
+  console.log(`[distance] initial_nearest_search=${radiusMeters <= 2000}`);
   const cachedResult = getCached(cacheKey);
   if (cachedResult) {
     console.log(`[cache] HIT (${cachedResult.length} activités) — ${cacheKey.substring(0, 40)}`);
@@ -848,9 +857,9 @@ app.post('/generer-activites', async (req, res) => {
       console.warn(`[places] nearbyResults=0 (group=${searchGroup} radius=${radiusMeters}m) → retry altGroup + rayon élargi`);
       try {
         const altGroup = (searchGroup + 2) % 4;
-        const widerR = Math.min(Math.round(radiusMeters * 1.5), 80000);
+        const widerR = expandRadius(radiusMeters);
         rawPlaces = await fetchNearbyPlaces(latitude, longitude, widerR, GOOGLE_PLACES_API_KEY, altGroup, null);
-        console.log(`[places] retry altGroup=${altGroup} radius=${widerR}m → ${rawPlaces.length} lieux`);
+        console.log(`[distance] radius_attempt=${widerR} auto_expand=true → ${rawPlaces.length} lieux`);
       } catch (retryErr) {
         console.warn('[places] retry échoue:', retryErr.message);
       }
@@ -930,7 +939,7 @@ app.post('/generer-activites', async (req, res) => {
     if (fresh.length < 3) {
       console.log(`[refresh] Seulement ${fresh.length} candidats (excludeCount=${excludeSet.size}) — rayon élargi`);
       try {
-        const widerRadius = Math.min(Math.round(radiusMeters * 1.5), 80000);
+        const widerRadius = expandRadius(radiusMeters);
         const rawPlaces2 = await fetchNearbyPlaces(
           latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4, null
         );
@@ -943,7 +952,7 @@ app.post('/generer-activites', async (req, res) => {
         }
         if (fresh2.length > fresh.length) {
           fresh = fresh2;
-          console.log(`[refresh] Rayon élargi (${widerRadius}m): ${fresh.length} nouveaux candidats`);
+          console.log(`[distance] radius_attempt=${widerRadius} auto_expand=true → ${fresh.length} candidats`);
         }
       } catch (e) {
         console.warn('[refresh] Retry rayon élargi échoue:', e.message);
