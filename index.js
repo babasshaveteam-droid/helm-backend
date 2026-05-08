@@ -642,6 +642,7 @@ const HIGH_VALUE_LONG_DISTANCE = new Set([
   'bowling_alley', 'swimming_pool', 'ice_skating_rink', 'library',
   'historic_site', 'castle', 'botanical_garden', 'tourist_attraction', 'natural_feature',
   'movie_theater',
+  'park',
 ]);
 
 function sendActivities(res, activities) {
@@ -809,6 +810,7 @@ app.post('/generer-activites', async (req, res) => {
   // 2b. Cache check — retourner immédiatement si même zone/météo/groupe déjà enrichi
   const excludeArr = Array.isArray(exclude) ? exclude : [];
   const cacheKey = getCacheKey(latitude, longitude, weatherIntent, radiusMeters, searchGroup, excludeArr);
+  console.log(`[refresh] radius=${radiusMeters} searchGroup=${searchGroup} excludeCount=${excludeArr.length}`);
   const cachedResult = getCached(cacheKey);
   if (cachedResult) {
     console.log(`[cache] HIT (${cachedResult.length} activités) — ${cacheKey.substring(0, 40)}`);
@@ -836,15 +838,26 @@ app.post('/generer-activites', async (req, res) => {
     let rawPlaces;
     try {
       rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup, weatherIntent);
-      console.log(`[backend] Google Places: ${rawPlaces.length} lieux reçus (group ${searchGroup})`);
+      console.log(`[places] nearbyResults=${rawPlaces.length} (group=${searchGroup} radius=${radiusMeters}m)`);
     } catch (placesErr) {
       console.error('[backend] Google Places échoue:', placesErr.message, '→ réponse vide');
       if (!res.headersSent) res.json([]); return;
     }
 
     if (!rawPlaces.length) {
-      console.warn('[backend] Google Places: 0 résultats → réponse vide');
-      if (!res.headersSent) res.json([]); return;
+      console.warn(`[places] nearbyResults=0 (group=${searchGroup} radius=${radiusMeters}m) → retry altGroup + rayon élargi`);
+      try {
+        const altGroup = (searchGroup + 2) % 4;
+        const widerR = Math.min(Math.round(radiusMeters * 1.5), 80000);
+        rawPlaces = await fetchNearbyPlaces(latitude, longitude, widerR, GOOGLE_PLACES_API_KEY, altGroup, null);
+        console.log(`[places] retry altGroup=${altGroup} radius=${widerR}m → ${rawPlaces.length} lieux`);
+      } catch (retryErr) {
+        console.warn('[places] retry échoue:', retryErr.message);
+      }
+      if (!rawPlaces.length) {
+        console.warn('[empty] reason=google_0_results_even_after_retry');
+        if (!res.headersSent) res.json([]); return;
+      }
     }
 
     // 4. Normalize → deduplicate → filter family-appropriate → exclude already-seen
@@ -901,6 +914,7 @@ app.post('/generer-activites', async (req, res) => {
       }
     }
 
+    console.log(`[places] pool total après targeted searches: ${deduped.length} lieux`);
     let fresh = excludeSet.size > 0 ? deduped.filter(p => !excludeSet.has(p.sourceId)) : deduped;
 
     // 4b. Filtre qualité à longue distance — éviter cafés/parcs génériques loin
@@ -912,12 +926,14 @@ app.post('/generer-activites', async (req, res) => {
       }
     }
 
-    // If too few fresh results after filtering, retry with a wider radius
-    if (fresh.length < 3 && excludeSet.size > 0) {
-      console.log(`[backend] Seulement ${fresh.length} candidats après exclusion — rayon élargi`);
+    // If too few fresh results after filtering, retry with a wider radius (2 phases)
+    if (fresh.length < 3) {
+      console.log(`[refresh] Seulement ${fresh.length} candidats (excludeCount=${excludeSet.size}) — rayon élargi`);
       try {
         const widerRadius = Math.min(Math.round(radiusMeters * 1.5), 80000);
-        const rawPlaces2 = await fetchNearbyPlaces(latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4, null);
+        const rawPlaces2 = await fetchNearbyPlaces(
+          latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4, null
+        );
         let fresh2 = deduplicate(rawPlaces2.map(normalizePlace))
           .filter(isFamilyPlace)
           .filter(p => !excludeSet.has(p.sourceId));
@@ -927,10 +943,20 @@ app.post('/generer-activites', async (req, res) => {
         }
         if (fresh2.length > fresh.length) {
           fresh = fresh2;
-          console.log(`[backend] Rayon élargi (${widerRadius}m): ${fresh.length} nouveaux candidats`);
+          console.log(`[refresh] Rayon élargi (${widerRadius}m): ${fresh.length} nouveaux candidats`);
         }
       } catch (e) {
-        console.warn('[backend] Retry rayon élargi échoue:', e.message);
+        console.warn('[refresh] Retry rayon élargi échoue:', e.message);
+      }
+
+      // Phase 2 — si toujours < 3 après retry, relâcher l'exclude
+      if (fresh.length < 3 && excludeSet.size > 0) {
+        console.log('[refresh] exclude_relaxed=true — relâchement de l\'exclude');
+        const freshNoExclude = deduped.filter(Boolean);
+        if (freshNoExclude.length > fresh.length) {
+          fresh = freshNoExclude;
+          console.log(`[refresh] Exclude relâché: ${fresh.length} candidats (dont déjà vus)`);
+        }
       }
     }
 
@@ -948,7 +974,7 @@ app.post('/generer-activites', async (req, res) => {
       candidates = deduped.slice(0, 6);
       console.warn('[backend] Tous les lieux exclus — fallback pool complet');
     }
-    console.log(`[backend] ${candidates.length} lieux candidats (${excludeSet.size} exclus)`);
+    console.log(`[quality] candidates=${candidates.length} excludeCount=${excludeSet.size}`);
 
     // Logs couverture familles
     const allTypes = candidates.flatMap(c => c.types ?? []);
@@ -1043,9 +1069,38 @@ app.post('/generer-activites', async (req, res) => {
       .map(normalizeActivityForDisplay)
       .filter(Boolean)
       .filter(validateNearbyActivity);
-    console.log(`[quality] ${finalActivities.length}/${enrichedActivities?.length ?? 0} activités passent la validation`);
-    setCache(cacheKey, finalActivities);
-    if (!res.headersSent) res.json(finalActivities);
+    console.log(`[quality] rejectedCount=${(enrichedActivities?.length ?? 0) - finalActivities.length} finalCount=${finalActivities.length}`);
+
+    if (finalActivities.length === 0) {
+      console.log('[refresh] fallback_reused_seen_places=true — tentative recherche large sans exclude');
+      let rescued = [];
+      try {
+        const rescueGroup = (searchGroup + 2) % 4;
+        const rescueRaw = await fetchNearbyPlaces(
+          latitude, longitude, 80000, GOOGLE_PLACES_API_KEY, rescueGroup, null
+        );
+        console.log(`[places] rescue: ${rescueRaw.length} lieux (radius=80km group=${rescueGroup})`);
+        const rescuePlaces = deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace);
+        if (rescuePlaces.length > 0) {
+          const rescueActivities = placesToFallback(rescuePlaces, latitude, longitude, weatherIntent);
+          rescued = rescueActivities.map(normalizeActivityForDisplay).filter(Boolean).filter(validateNearbyActivity);
+          console.log(`[refresh] fallback_reused_seen_places: ${rescued.length} activités reproposées`);
+        }
+      } catch (e) {
+        console.warn('[refresh] rescue échoue:', e.message);
+      }
+      if (rescued.length > 0) {
+        setCache(cacheKey, rescued);
+        if (!res.headersSent) res.json(rescued);
+      } else {
+        console.log('[empty] reason=no_activities_after_all_fallbacks');
+        setCache(cacheKey, []);
+        if (!res.headersSent) res.json([]);
+      }
+    } else {
+      setCache(cacheKey, finalActivities);
+      if (!res.headersSent) res.json(finalActivities);
+    }
 
   } catch (e) {
     console.error('[backend] Erreur globale /generer-activites:', e.message);
