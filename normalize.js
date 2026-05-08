@@ -25,18 +25,40 @@ function normalizePlace(googlePlace) {
     rating: googlePlace.rating ?? null,
     ratingCount: googlePlace.userRatingCount ?? null,
     isOpen: googlePlace.currentOpeningHours?.openNow ?? null,
+    businessStatus: googlePlace.businessStatus ?? null,
     normalizedKey: normalizeKey(name + '|' + address),
   };
+}
+
+function nameKey(name) {
+  return (name || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\b(la|le|les|de|du|des|d|l)\b/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
 }
 
 function deduplicate(places) {
   const seenIds = new Set();
   const seenKeys = new Set();
+  const seenNameKeys = new Set();
   return places.filter(p => {
-    if (seenIds.has(p.sourceId)) return false;
-    if (p.normalizedKey && seenKeys.has(p.normalizedKey)) return false;
+    if (seenIds.has(p.sourceId)) {
+      console.log(`[dedupe] removed_duplicate reason=placeId name="${p.name}"`);
+      return false;
+    }
+    if (p.normalizedKey && seenKeys.has(p.normalizedKey)) {
+      console.log(`[dedupe] removed_duplicate reason=normalizedKey name="${p.name}"`);
+      return false;
+    }
+    const nk = nameKey(p.name);
+    if (nk.length >= 6 && seenNameKeys.has(nk)) {
+      console.log(`[dedupe] removed_duplicate reason=name_similarity name="${p.name}"`);
+      return false;
+    }
     seenIds.add(p.sourceId);
     if (p.normalizedKey) seenKeys.add(p.normalizedKey);
+    if (nk.length >= 6) seenNameKeys.add(nk);
     return true;
   });
 }
@@ -54,6 +76,12 @@ const BLOCKED_TYPES = new Set([
   'locality', 'neighborhood', 'sublocality', 'political',
   'administrative_area_level_1', 'administrative_area_level_2', 'administrative_area_level_3',
   'route', 'street_address', 'postal_code', 'premise', 'subpremise',
+  // Types commerciaux / services — aucun intérêt activité famille
+  'store', 'hardware_store', 'home_goods_store', 'furniture_store',
+  'electronics_store', 'clothing_store', 'shoe_store', 'jewelry_store',
+  'book_store', 'florist', 'pet_store', 'bicycle_store',
+  'general_contractor', 'electrician', 'plumber', 'painter',
+  'roofing_contractor', 'moving_company', 'locksmith',
 ]);
 
 const BLOCKED_NAME_PATTERNS = /\b(pharmacie|pharmacy|apotheke|banque|dentiste|cabinet\s+m[eé]dical|clinique|h[oô]pital|hospital|centre\s+m[eé]dical|gare\b|assurance|mairie|commune)\b/i;

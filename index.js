@@ -6,6 +6,7 @@ const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
 const { applyFamilyRules, normalizeIndoorOutdoor } = require('./activityRules');
 const { resolveActivityEmoji, resolveAll } = require('./iconResolver');
+const { filterFamilyActivities } = require('./qualityFilter');
 
 const app = express();
 app.use(cors());
@@ -872,7 +873,7 @@ app.post('/generer-activites', async (req, res) => {
     // 4. Normalize → deduplicate → filter family-appropriate → exclude already-seen
     const excludeSet = new Set(Array.isArray(exclude) ? exclude : []);
     const normalized = rawPlaces.map(normalizePlace);
-    let deduped = deduplicate(normalized).filter(isFamilyPlace);
+    let deduped = filterFamilyActivities(deduplicate(normalized).filter(isFamilyPlace));
 
     // 4a. Recherches ciblées météo-aware — max 2 queries par requête
     function getTargetedSearches(sg, wi) {
@@ -916,7 +917,7 @@ app.post('/generer-activites', async (req, res) => {
           GOOGLE_PLACES_API_KEY, query, 8
         );
         console.log(`[targeted] "${query}": ${targeted.length} résultats`);
-        const targetedNorm = targeted.map(normalizePlace).filter(isFamilyPlace);
+        const targetedNorm = filterFamilyActivities(targeted.map(normalizePlace).filter(isFamilyPlace));
         deduped = deduplicate([...deduped, ...targetedNorm]);
       } catch (e) {
         console.warn('[targeted] Recherche ciblée échoue:', e.message);
@@ -1074,10 +1075,21 @@ app.post('/generer-activites', async (req, res) => {
     } // end else (useOpenRouter)
 
     // Normaliser, valider, mettre en cache et envoyer
+    const seenFinalIds = new Set();
     const finalActivities = (Array.isArray(enrichedActivities) ? enrichedActivities : [])
       .map(normalizeActivityForDisplay)
       .filter(Boolean)
-      .filter(validateNearbyActivity);
+      .filter(validateNearbyActivity)
+      .filter(a => {
+        const id = a.sourceId;
+        if (!id) return true;
+        if (seenFinalIds.has(id)) {
+          console.log(`[dedupe] removed_duplicate reason=final_sourceId name="${a.titre ?? '?'}"`);
+          return false;
+        }
+        seenFinalIds.add(id);
+        return true;
+      });
     console.log(`[quality] rejectedCount=${(enrichedActivities?.length ?? 0) - finalActivities.length} finalCount=${finalActivities.length}`);
 
     if (finalActivities.length === 0) {
@@ -1089,7 +1101,7 @@ app.post('/generer-activites', async (req, res) => {
           latitude, longitude, 80000, GOOGLE_PLACES_API_KEY, rescueGroup, null
         );
         console.log(`[places] rescue: ${rescueRaw.length} lieux (radius=80km group=${rescueGroup})`);
-        const rescuePlaces = deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace);
+        const rescuePlaces = filterFamilyActivities(deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace));
         if (rescuePlaces.length > 0) {
           const rescueActivities = placesToFallback(rescuePlaces, latitude, longitude, weatherIntent);
           rescued = rescueActivities.map(normalizeActivityForDisplay).filter(Boolean).filter(validateNearbyActivity);

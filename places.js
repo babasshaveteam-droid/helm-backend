@@ -32,6 +32,7 @@ const FIELD_MASK = [
   'places.rating',
   'places.userRatingCount',
   'places.currentOpeningHours.openNow',
+  'places.businessStatus',
 ].join(',');
 
 async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0, weatherIntent = null) {
