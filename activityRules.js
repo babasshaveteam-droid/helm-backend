@@ -68,13 +68,53 @@ const GLOBAL_FORBIDDEN_TAGS = new Set([
 
 const FAMILIES = {
 
+  trampoline_park: {
+    detect: (name, types) =>
+      /trampoline|jump\s*(park|zone|area|land)|air\s*park|fly\s*zone|saut\s*(libre|extrême)/i.test(name),
+    category:    'Sport',
+    type:        'indoor',
+    icon:        '🤸',
+    effortLevel: 'Modéré',
+    weatherFit:  ['rainy', 'cold', 'unstable', 'sunny'],
+    subtitle:    "Un parc de trampolines pour sauter, se défouler et rire en famille.",
+    whyGoodIdea: "Les enfants adorent les parcs de trampolines — énergie dépensée, sourires garantis.",
+    benefit:     "Défoulement et fun pour toute la famille",
+    whatToBring: ['Chaussettes antidérapantes', 'Eau', 'Porte-monnaie'],
+    practicalInfos: ['Réservation recommandée', 'Chaussettes obligatoires sur place', 'Tarifs à vérifier'],
+    tags:        ['trampoline', 'saut', 'sport', 'famille', 'enfants', 'intérieur'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
+  amusement_park_family: {
+    detect: (name, types) =>
+      types.includes('amusement_park') ||
+      /parc\s+(de\s+loisirs?|d['']attractions?|familial|aquatique)|fun\s*park|adventure\s*park/i.test(name),
+    category:    'Loisirs',
+    type:        'outdoor',
+    icon:        '🎡',
+    effortLevel: 'Facile',
+    weatherFit:  ['sunny', 'unstable', 'hot'],
+    subtitle:    "Un parc de loisirs pour une journée d'aventure et de sensations en famille.",
+    whyGoodIdea: "Manèges, attractions et activités variées pour petits et grands — une journée inoubliable.",
+    benefit:     "Aventure et sensations pour toute la famille",
+    whatToBring: ['Porte-monnaie', 'Eau', 'Crème solaire', 'Snacks'],
+    practicalInfos: ['Tarifs et horaires à vérifier', 'Réservation recommandée en haute saison'],
+    tags:        ['attractions', 'loisirs', 'famille', 'enfants', 'parc'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
   kids_play: {
     // Centre de loisirs / aire de jeux indoor — doit passer AVANT bowling
     // pour éviter qu'un amusement_center avec bowling_alley secondaire → faux bowling
     detect: (name, types) =>
       (types.includes('amusement_center') ||
-       /payerneland|laurapark|laura\s*park|indoor\s*play(?:ground)?|aire\s+de\s+jeux/i.test(name)) &&
+       /payerneland|laurapark|laura\s*park|indoor\s*play(?:ground)?/i.test(name)) &&
       !types.includes('bowling_alley') &&
+      !types.includes('playground') &&
       !/bowling|quilles/i.test(name),
     category:    'Loisirs',
     type:        'indoor',
@@ -128,6 +168,26 @@ const FAMILIES = {
     skipIsOpen:  false,
     forbiddenPracticalInfos: [/réservation recommandée le week-end/i],
     forbiddenTags: ['lieu à découvrir', 'attraction'],
+  },
+
+  outdoor_pool: {
+    detect: (name, types) =>
+      types.includes('swimming_pool') &&
+      !/couverte?|couvert|indoor|int[eé]rieur/i.test(name),
+    category:    'Sport',
+    type:        'outdoor',
+    icon:        '🏊',
+    effortLevel: 'Facile',
+    weatherFit:  ['sunny', 'hot'],
+    subtitle:    "Une piscine publique en plein air pour se rafraîchir en famille.",
+    whyGoodIdea: "Idéal par beau temps — les enfants peuvent barboter et nager dans un cadre sécurisé.",
+    benefit:     "Baignade et fraîcheur en famille",
+    whatToBring: ['Maillot de bain', 'Serviette', 'Crème solaire', 'Bonnet de bain', 'Porte-monnaie'],
+    practicalInfos: ['Piscine publique', 'Tarifs et horaires à vérifier', 'Baignade surveillée'],
+    tags:        ['piscine', 'baignade', 'eau', 'extérieur', 'famille', 'été'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [/réservation recommandée le week-end/i],
+    forbiddenTags: ['lieu à découvrir'],
   },
 
   water: {
@@ -234,19 +294,19 @@ const FAMILIES = {
   mountain_hike: {
     detect: (name, types) =>
       types.some(t => ['hiking_area'].includes(t)) ||
-      /randonnée|sentier\s+balisé|sommet\b|belvédère|viewpoint|via\s*ferrata/i.test(name),
+      /randonnée|sentier\s+(balisé|nature|familial)?|balade\s+(nature|famille|forêt|montagne)?|forêt\s+(parc|promenade)?|promenade\s+(forêt|nature|famille)|sommet\b|belvédère|viewpoint|via\s*ferrata|point\s+de\s+vue/i.test(name),
     category:    'Nature',
     type:        'outdoor',
-    icon:        '⛰️',
-    effortLevel: 'Aventure',
+    icon:        '🥾',
+    effortLevel: 'Modéré',
     weatherFit:  ['sunny', 'unstable'],
-    subtitle:    null,
-    whyGoodIdea: null,
-    benefit:     null,
-    whatToBring: ['Chaussures de marche', 'Eau', 'Petite veste', 'Collation'],
-    practicalInfos: null,
-    tags:        null,
-    skipIsOpen:  false,
+    subtitle:    "Une balade en plein air pour se ressourcer et découvrir la nature en famille.",
+    whyGoodIdea: "Marcher en famille dans la nature renforce les liens et offre de beaux paysages aux enfants.",
+    benefit:     "Plein air et ressourcement en famille",
+    whatToBring: ['Chaussures de marche', 'Eau', 'Collation', 'Petite veste', 'Crème solaire'],
+    practicalInfos: ['Sentier accessible aux familles', 'Distance et dénivelé à vérifier', 'Prévenir en cas de météo changeante'],
+    tags:        ['randonnée', 'nature', 'balade', 'extérieur', 'famille', 'montagne', 'forêt'],
+    skipIsOpen:  true,
     forbiddenPracticalInfos: [/réservation recommandée/i],
     forbiddenTags: ['café', 'lieu à découvrir'],
   },
@@ -268,6 +328,25 @@ const FAMILIES = {
     tags:        ['lecture', 'calme', 'intérieur', 'famille', 'gratuit'],
     skipIsOpen:  false,
     forbiddenPracticalInfos: [/réservation recommandée/i],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
+  cave_visit: {
+    detect: (name, types) =>
+      /grotte|caverne|gouffre|aven\b|stalactite|stalagmite|souterrain\s+(visite|guidé|famille)/i.test(name),
+    category:    'Nature',
+    type:        'indoor',
+    icon:        '🦇',
+    effortLevel: 'Modéré',
+    weatherFit:  ['rainy', 'cold', 'unstable', 'sunny'],
+    subtitle:    "Une visite souterraine fascinante pour découvrir un monde caché en famille.",
+    whyGoodIdea: "Les grottes offrent un spectacle naturel impressionnant — stalactites, stalagmites et formations géologiques.",
+    benefit:     "Découverte souterraine originale",
+    whatToBring: ['Petite veste (fraîcheur)', 'Chaussures fermées', 'Porte-monnaie'],
+    practicalInfos: ['Visite guidée souvent disponible', 'Tarifs à vérifier', "Température fraîche à l'intérieur"],
+    tags:        ['grotte', 'nature', 'famille', 'découverte', 'géologie', 'souterrain'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
     forbiddenTags: ['lieu à découvrir'],
   },
 
@@ -293,22 +372,42 @@ const FAMILIES = {
     forbiddenTags: ['lieu à découvrir', "parc d'attractions"],
   },
 
+  outdoor_playground: {
+    detect: (name, types) =>
+      types.includes('playground') ||
+      /aire\s+de\s+jeux\s*(extérieure?|en\s+plein\s+air|publique?)?|plaine\s+de\s+jeux|jeux\s+d['']enfants/i.test(name),
+    category:    'Loisirs',
+    type:        'outdoor',
+    icon:        '🛝',
+    effortLevel: 'Facile',
+    weatherFit:  ['sunny', 'unstable'],
+    subtitle:    "Une aire de jeux en plein air pour courir, grimper et se dépenser.",
+    whyGoodIdea: "Les enfants adorent les structures de jeux extérieures — toboggans, balançoires et structures à grimper.",
+    benefit:     "Jeux et défoulement en plein air",
+    whatToBring: ['Eau', 'Collation', 'Vêtements adaptés'],
+    practicalInfos: ['Accès libre', 'Adapté aux enfants', 'Espace extérieur'],
+    tags:        ['jeux', 'enfants', 'extérieur', 'famille', 'plein air'],
+    skipIsOpen:  true,
+    forbiddenPracticalInfos: [/réservation recommandée/i],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
   park_nature: {
     detect: (name, types) =>
       types.some(t => ['park','natural_feature','botanical_garden','nature_reserve','campground'].includes(t)) &&
       !types.includes('beach'),
     category:    'Nature',
     type:        'outdoor',
-    icon:        null,
-    effortLevel: null,
-    weatherFit:  null,
-    subtitle:    null,
-    whyGoodIdea: null,
-    benefit:     null,
-    whatToBring: null,
-    practicalInfos: null,
-    tags:        null,
-    skipIsOpen:  false,
+    icon:        '🌿',
+    effortLevel: 'Facile',
+    weatherFit:  ['sunny', 'unstable'],
+    subtitle:    "Un espace vert pour se promener et profiter de la nature en famille.",
+    whyGoodIdea: "Un moment simple et gratuit au grand air — parfait pour les enfants qui ont besoin de bouger.",
+    benefit:     "Grand air et nature en famille",
+    whatToBring: ['Eau', 'Collation', 'Vêtements adaptés'],
+    practicalInfos: ['Accès libre', 'Idéal pour pique-niquer', 'Prévoir vêtements adaptés à la météo'],
+    tags:        ['nature', 'parc', 'extérieur', 'famille', 'plein air', 'promenade'],
+    skipIsOpen:  true,
     forbiddenPracticalInfos: [/réservation recommandée le week-end/i],
     forbiddenTags: ['café', 'lieu à découvrir'],
   },

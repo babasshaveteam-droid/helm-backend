@@ -4,13 +4,13 @@
 const FAMILY_ACTIVITY_TYPES = new Set([
   'zoo', 'aquarium', 'museum', 'amusement_park', 'bowling_alley',
   'ice_skating_rink', 'library', 'movie_theater', 'art_gallery',
-  'amusement_center',
+  'amusement_center', 'playground',
 ]);
 
 const ACTIVITY_TYPES_MEDIUM = new Set([
   'park', 'tourist_attraction', 'natural_feature', 'botanical_garden',
   'swimming_pool', 'shopping_mall', 'cafe', 'restaurant', 'beach',
-  'gym', 'sports_complex',
+  'gym', 'sports_complex', 'campground',
 ]);
 
 const NEGATIVE_COMMERCIAL_TYPES = new Set([
@@ -72,8 +72,8 @@ function getFamilyActivityScore(place) {
   else if (types.includes('lodging') || types.includes('bar')) score += 1;
 
   // Nom d'activité famille claire
-  if (/ferme\s+p[eé]dagog|parc\s+(de\s+loisirs?|animalier|d['']attract)|aire\s+de\s+jeux|ludoth[eè]que|piscine\s+(municipale|publique|communale)|centre\s+aquatique/i.test(name)) score += 2;
-  else if (/patinoire|bowling|escalade|trampoline|cin[eé]ma|biblioth[eè]que|mus[eé]e|zoo|aquarium/i.test(name)) score += 1;
+  if (/ferme\s+p[eé]dagog|parc\s+(de\s+loisirs?|animalier|d['']attract)|aire\s+de\s+jeux|ludoth[eè]que|piscine\s+(municipale|publique|communale)|centre\s+aquatique|trampoline\s+(park|zone|parc)/i.test(name)) score += 2;
+  else if (/patinoire|bowling|escalade|trampoline|cin[eé]ma|biblioth[eè]que|mus[eé]e|zoo|aquarium|randonn[eé]e|sentier|grotte|caverne|belv[eé]d[eè]re|aire\s+de\s+jeux/i.test(name)) score += 1;
 
   // Note correcte
   if (rating != null && rating >= 3.5) score += 1;

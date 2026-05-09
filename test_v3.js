@@ -324,9 +324,9 @@ function testN() {
   function getTargetedSearches(sg, wi) {
     const byGroup = {
       0: 'musée exposition grotte caverne souterrain',
-      1: 'salle escalade climbing bloc trampoline',
+      1: 'salle escalade climbing bloc trampoline aire de jeux',
       2: 'ferme pédagogique parc animalier cinéma bowling',
-      3: 'forêt balade jardin botanique sentier',
+      3: 'forêt randonnée balade sentier famille',
     };
     if (wi === 'sunny') {
       const queries = [
@@ -334,6 +334,9 @@ function testN() {
         'forêt balade jardin famille',
         'lac plage baignade famille',
         'balade montagne point de vue famille',
+        'grotte caverne visite famille',
+        'trampoline park famille',
+        'aire de jeux extérieure famille',
       ];
       if (byGroup[sg]) queries.push(byGroup[sg]);
       return queries;
@@ -346,9 +349,59 @@ function testN() {
 
   assert(queries0.some(q => /lac|plage|baignade/.test(q)), 'Text Search sunny inclut lac/plage/baignade');
   assert(queries0.some(q => /montagne|point de vue|balade/.test(q)), 'Text Search sunny inclut montagne/point de vue');
-  assert(queries0.some(q => /grotte|musée|exposition/.test(q)), 'Text Search sunny groupe 0 inclut culture (byGroup)');
+  assert(queries0.some(q => /grotte|musée|exposition/.test(q)), 'Text Search sunny groupe 0 inclut culture (byGroup ou query)');
+  assert(queries0.some(q => /trampoline/.test(q)), 'Text Search sunny inclut trampoline');
+  assert(queries0.some(q => /aire de jeux/.test(q)), 'Text Search sunny inclut aire de jeux');
   assert(queries2.some(q => /cinéma|bowling|parc animalier/.test(q)), 'Text Search sunny groupe 2 inclut loisirs (byGroup)');
-  assert(queries0.length === 5, `Text Search sunny groupe 0 = ${queries0.length} requêtes (attendu 5)`);
+  assert(queries0.length === 8, `Text Search sunny groupe 0 = ${queries0.length} requêtes (attendu 8)`);
+}
+
+// ─── Test O — playground scoring + outdoor_playground family ─────────────────
+function testO() {
+  console.log('\n═══ Test O — playground scoring + outdoor_playground family ═══');
+  const { getFamilyActivityScore, MIN_SCORE } = require('./qualityFilter');
+  const { detectFamily, applyFamilyRules } = require('./activityRules');
+
+  // playground doit avoir score >= MIN_SCORE (FAMILY_ACTIVITY_TYPES → +3)
+  const playground = mockPlace('Aire de jeux des Cèdres', ['playground', 'point_of_interest', 'establishment'], { rating: 4.0, ratingCount: 15, isOpen: true });
+  const score = getFamilyActivityScore(playground);
+  assert(score >= MIN_SCORE, `playground score=${score} doit être >= ${MIN_SCORE}`);
+
+  // detectFamily → outdoor_playground
+  const family = detectFamily('Aire de jeux des Cèdres', ['playground']);
+  assert(family === 'outdoor_playground', `detectFamily playground → '${family}' attendu 'outdoor_playground'`);
+
+  // applyFamilyRules fromFallback → type outdoor, icon 🛝
+  const activity = applyFamilyRules(
+    { type: 'outdoor', weatherFit: [], whatToBring: [], practicalInfos: [], tags: [] },
+    'Aire de jeux des Cèdres', ['playground'], { fromFallback: true, isOpen: true }
+  );
+  assert(activity.type === 'outdoor', `outdoor_playground type='${activity.type}' attendu 'outdoor'`);
+  assert(activity.icon === '🛝', `outdoor_playground icon='${activity.icon}' attendu '🛝'`);
+  assert(activity.skipIsOpen === true || activity.practicalInfos?.includes('Accès libre'), 'outdoor_playground skipIsOpen ou Accès libre');
+}
+
+// ─── Test P — amusement_park family ──────────────────────────────────────────
+function testP() {
+  console.log('\n═══ Test P — amusement_park_family ═══');
+  const { detectFamily, applyFamilyRules } = require('./activityRules');
+
+  // Détection par type Google
+  const familyByType = detectFamily('Parc de loisirs Walibi', ['amusement_park', 'tourist_attraction']);
+  assert(familyByType === 'amusement_park_family', `detectFamily amusement_park type → '${familyByType}'`);
+
+  // Détection par nom
+  const familyByName = detectFamily("Parc d'attractions famille", []);
+  assert(familyByName === 'amusement_park_family', `detectFamily nom parc attractions → '${familyByName}'`);
+
+  // applyFamilyRules fromFallback → type outdoor, icon 🎡, category Loisirs
+  const activity = applyFamilyRules(
+    { type: null, weatherFit: [], whatToBring: [], practicalInfos: [], tags: [] },
+    'Walibi', ['amusement_park'], { fromFallback: true, isOpen: true }
+  );
+  assert(activity.type === 'outdoor', `amusement_park_family type='${activity.type}' attendu 'outdoor'`);
+  assert(activity.icon === '🎡', `amusement_park_family icon='${activity.icon}' attendu '🎡'`);
+  assert(activity.category === 'Loisirs', `amusement_park_family category='${activity.category}'`);
 }
 
 // ─── Runner ───────────────────────────────────────────────────────────────────
@@ -367,6 +420,8 @@ if (!arg || arg === 'K') testK();
 if (!arg || arg === 'L') testL();
 if (!arg || arg === 'M') testM();
 if (!arg || arg === 'N') testN();
+if (!arg || arg === 'O') testO();
+if (!arg || arg === 'P') testP();
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`Résultat: ${passed} ✅ PASS  ${failed} ❌ FAIL`);

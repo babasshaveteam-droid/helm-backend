@@ -879,15 +879,16 @@ app.post('/generer-activites', async (req, res) => {
     function getTargetedSearches(sg, wi) {
       const byGroup = {
         0: 'musée exposition grotte caverne souterrain',
-        1: 'salle escalade climbing bloc trampoline',
+        1: 'salle escalade climbing bloc trampoline aire de jeux',
         2: 'ferme pédagogique parc animalier cinéma bowling',
-        3: 'forêt balade jardin botanique sentier',
+        3: 'forêt randonnée balade sentier famille',
       };
       if (wi === 'rainy') {
         return [
           'ludothèque bibliothèque jeunesse enfants',
           'salle escalade climbing trampoline',
           'cinéma ciné film enfants famille',
+          'grotte caverne visite famille',
         ];
       }
       if (wi === 'cold') {
@@ -895,6 +896,7 @@ app.post('/generer-activites', async (req, res) => {
           'ludothèque bibliothèque jeunesse enfants',
           'salle escalade climbing trampoline',
           'cinéma ciné film enfants famille',
+          'grotte caverne visite famille',
           'forêt promenade parc ferme point de vue famille',
         ];
       }
@@ -904,6 +906,9 @@ app.post('/generer-activites', async (req, res) => {
           'forêt balade jardin famille',
           'lac plage baignade famille',
           'balade montagne point de vue famille',
+          'grotte caverne visite famille',
+          'trampoline park famille',
+          'aire de jeux extérieure famille',
         ];
         if (byGroup[sg]) queries.push(byGroup[sg]);
         return queries;
@@ -912,12 +917,15 @@ app.post('/generer-activites', async (req, res) => {
         return [
           'piscine plage lac baignade aquarium',
           'balade ombre nature forêt parc famille',
+          'aire de jeux extérieure famille',
         ];
       }
       if (wi === 'unstable') {
         return [
           'ludothèque bibliothèque jeunesse enfants',
           'bowling piscine couverte cinéma famille',
+          'trampoline park famille',
+          'grotte caverne visite famille',
         ];
       }
       return byGroup[sg] ? [byGroup[sg]] : [];

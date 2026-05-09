@@ -1,10 +1,10 @@
 // Règles officielles : docs/HELM_CORE_RULES.md
 // Rotate through different type groups on each refresh to surface varied places
 const SEARCH_GROUPS = [
-  ['park', 'museum', 'library', 'tourist_attraction', 'movie_theater', 'bowling_alley'], // groupe 0
-  ['park', 'art_gallery', 'museum', 'tourist_attraction', 'amusement_center', 'movie_theater'], // groupe 1 — gym retiré, cinéma ajouté
-  ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'museum', 'library'],     // groupe 2 — sport indoor
-  ['zoo', 'aquarium', 'park', 'tourist_attraction', 'museum'],                      // groupe 3 — animaux
+  ['park', 'museum', 'library', 'tourist_attraction', 'movie_theater', 'bowling_alley', 'playground', 'amusement_park'], // groupe 0
+  ['park', 'art_gallery', 'museum', 'tourist_attraction', 'amusement_center', 'movie_theater', 'amusement_park'],        // groupe 1
+  ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'museum', 'library', 'campground'],                             // groupe 2
+  ['zoo', 'aquarium', 'park', 'tourist_attraction', 'museum', 'playground', 'amusement_park'],                           // groupe 3 — animaux + jeux
 ];
 
 // Weather-intent-specific place types — override SEARCH_GROUPS when weatherIntent is set
@@ -17,9 +17,9 @@ const WEATHER_TYPES = {
     // outdoor court/familial autorisé par froid raisonnable
     'park', 'tourist_attraction', 'zoo',
   ],
-  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool', 'natural_feature', 'botanical_garden', 'beach'],
-  unstable: ['museum', 'library', 'cafe', 'bowling_alley', 'shopping_mall', 'park', 'swimming_pool', 'ice_skating_rink', 'gym'],
-  sunny:    ['park', 'zoo', 'aquarium', 'tourist_attraction', 'botanical_garden', 'amusement_park', 'natural_feature', 'beach'],
+  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool', 'natural_feature', 'botanical_garden', 'beach', 'playground'],
+  unstable: ['museum', 'library', 'cafe', 'bowling_alley', 'shopping_mall', 'park', 'swimming_pool', 'ice_skating_rink', 'gym', 'playground'],
+  sunny:    ['park', 'zoo', 'aquarium', 'tourist_attraction', 'botanical_garden', 'amusement_park', 'natural_feature', 'beach', 'playground', 'campground'],
 };
 
 // Only request the fields we actually use — minimises cost and payload
