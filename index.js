@@ -650,7 +650,7 @@ function expandRadius(r) {
   if (r <= 1000) return 5000;
   if (r <= 3000) return 12000;
   if (r <= 8000) return 25000;
-  return Math.min(Math.round(r * 1.5), 80000);
+  return Math.min(Math.round(r * 1.5), 50000);
 }
 
 function sendActivities(res, activities) {
@@ -1112,7 +1112,7 @@ app.post('/generer-activites', async (req, res) => {
       try {
         const rescueGroup = (searchGroup + 2) % 4;
         const rescueRaw = await fetchNearbyPlaces(
-          latitude, longitude, 80000, GOOGLE_PLACES_API_KEY, rescueGroup, null
+          latitude, longitude, 50000, GOOGLE_PLACES_API_KEY, rescueGroup, null
         );
         console.log(`[places] rescue: ${rescueRaw.length} lieux (radius=80km group=${rescueGroup})`);
         const rescuePlaces = deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace);
