@@ -1110,18 +1110,26 @@ app.post('/generer-activites', async (req, res) => {
 
     // Normaliser, valider, mettre en cache et envoyer
     const seenFinalIds = new Set();
+    const seenFinalCoords = new Set();
     const finalActivities = (Array.isArray(enrichedActivities) ? enrichedActivities : [])
       .map(normalizeActivityForDisplay)
       .filter(Boolean)
       .filter(validateNearbyActivity)
       .filter(a => {
         const id = a.sourceId;
-        if (!id) return true;
-        if (seenFinalIds.has(id)) {
+        if (id && seenFinalIds.has(id)) {
           console.log(`[dedupe] removed_duplicate reason=final_sourceId name="${a.titre ?? '?'}"`);
           return false;
         }
-        seenFinalIds.add(id);
+        const coordKey = (a.latitude != null && a.longitude != null)
+          ? `${Math.round(a.latitude * 10000)},${Math.round(a.longitude * 10000)}`
+          : null;
+        if (coordKey && seenFinalCoords.has(coordKey)) {
+          console.log(`[dedupe] removed_duplicate reason=final_coordinates name="${a.titre ?? '?'}"`);
+          return false;
+        }
+        if (id) seenFinalIds.add(id);
+        if (coordKey) seenFinalCoords.add(coordKey);
         return true;
       });
     console.log(`[quality] rejectedCount=${(enrichedActivities?.length ?? 0) - finalActivities.length} finalCount=${finalActivities.length}`);

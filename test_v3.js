@@ -445,6 +445,78 @@ function testR() {
   assert(detectFamily('Spectacle jeunesse marionnettes', []) === 'theater_show', 'theater_show détecté');
 }
 
+// ─── Test S — Déduplication par coordonnées ────────────────────────────────────
+function testS() {
+  console.log('\n═══ Test S — Déduplication par coordonnées ═══');
+
+  // Même coord exacte = doublon
+  const p1 = mockPlace('Fun House', ['amusement_center'], { sourceId: 'id-A', lat: 46.5218, lon: 6.6327, address: 'Rue A 1' });
+  const p2 = mockPlace('La Ruche', ['amusement_center'], { sourceId: 'id-B', lat: 46.5218, lon: 6.6327, address: 'Rue B 2' });
+  const deduped1 = deduplicate([p1, p2]);
+  assert(deduped1.length === 1, 'deux lieux même coordonnée → 1 seul gardé');
+  assert(deduped1[0].sourceId === 'id-A', 'le premier arrivé est gardé');
+
+  // Coord légèrement différente (>11 m) = deux lieux distincts
+  const p3 = mockPlace('Bowling City', ['bowling_alley'], { sourceId: 'id-C', lat: 46.5218, lon: 6.6327, address: 'Rue C 3' });
+  const p4 = mockPlace('Laser Arena', ['amusement_center'], { sourceId: 'id-D', lat: 46.5220, lon: 6.6330, address: 'Rue D 4' });
+  const deduped2 = deduplicate([p3, p4]);
+  assert(deduped2.length === 2, 'deux lieux coords différentes → tous deux gardés');
+
+  // Sans coordonnées = pas de dedup coord (ne plante pas)
+  const p5 = Object.assign(mockPlace('Place sans coord', ['park'], { sourceId: 'id-E', address: 'Rue E 5' }), { lat: null, lon: null });
+  const p6 = Object.assign(mockPlace('Autre sans coord', ['park'], { sourceId: 'id-F', address: 'Rue F 6' }), { lat: null, lon: null });
+  const deduped3 = deduplicate([p5, p6]);
+  assert(deduped3.length === 2, 'lieux sans coord → tous deux gardés');
+}
+
+// ─── Test T — Kiosque loterie rejeté ──────────────────────────────────────────
+function testT() {
+  console.log('\n═══ Test T — Kiosque loterie rejeté ═══');
+
+  const lottery = mockPlace('Jeux de la loterie', ['point_of_interest', 'establishment'], { rating: 4.0, ratingCount: 20, isOpen: true });
+  assert(getFamilyActivityScore(lottery) < MIN_SCORE, '"Jeux de la loterie" rejeté (score < MIN_SCORE)');
+  assert(getRejectReason(lottery, getFamilyActivityScore(lottery)) === 'lottery_kiosk', 'reason=lottery_kiosk pour loterie');
+
+  const pmu = mockPlace('PMU', ['food', 'establishment'], { rating: 3.8, ratingCount: 15, isOpen: true });
+  assert(getFamilyActivityScore(pmu) < MIN_SCORE, '"PMU" rejeté');
+
+  const fdj = mockPlace('FDJ - Française des Jeux', ['point_of_interest', 'establishment'], { rating: 4.2, ratingCount: 30, isOpen: true });
+  assert(getFamilyActivityScore(fdj) < MIN_SCORE, '"FDJ - Française des Jeux" rejeté');
+
+  // Ne pas bloquer un vrai musée ou zoo qui contiendrait accidentellement "loto" dans l'adresse
+  const zoo = mockPlace('Zoo de Servion', ['zoo', 'tourist_attraction'], { rating: 4.5, ratingCount: 500, isOpen: true });
+  assert(getFamilyActivityScore(zoo) >= MIN_SCORE, 'zoo normal non affecté par le filtre loterie');
+}
+
+// ─── Test U — Score montagne ≥ MIN_SCORE ──────────────────────────────────────
+function testU() {
+  console.log('\n═══ Test U — Montagne score ≥ MIN_SCORE ═══');
+
+  // natural_feature (+2) + "see" keyword (+1) = 3
+  const oeschinen = mockPlace('Oeschinesee', ['natural_feature', 'tourist_attraction'], { rating: null, ratingCount: null, isOpen: null });
+  assert(getFamilyActivityScore(oeschinen) >= MIN_SCORE, 'Oeschinesee (natural_feature + "see") score ≥ MIN_SCORE');
+
+  // natural_feature (+2) + "gorge" keyword (+1) = 3
+  const gorges = mockPlace('Gorges du Durnand', ['natural_feature'], { rating: null, ratingCount: null, isOpen: null });
+  assert(getFamilyActivityScore(gorges) >= MIN_SCORE, 'Gorges du Durnand (natural_feature + "gorge") score ≥ MIN_SCORE');
+
+  // natural_feature (+2) + "cascade" (+1) = 3
+  const cascade = mockPlace('Cascade de Pissevache', ['natural_feature'], { rating: null, ratingCount: null, isOpen: null });
+  assert(getFamilyActivityScore(cascade) >= MIN_SCORE, 'Cascade de Pissevache (natural_feature + "cascade") score ≥ MIN_SCORE');
+
+  // natural_feature (+2) + "lac" (+1) = 3
+  const lac = mockPlace('Lac de Moiry', ['natural_feature'], { rating: null, ratingCount: null, isOpen: null });
+  assert(getFamilyActivityScore(lac) >= MIN_SCORE, 'Lac de Moiry (natural_feature + "lac") score ≥ MIN_SCORE');
+
+  // natural_feature (+2) + "panorama" (+1) = 3
+  const panorama = mockPlace('Panorama Rochers de Naye', ['natural_feature', 'tourist_attraction'], { rating: null, ratingCount: null, isOpen: null });
+  assert(getFamilyActivityScore(panorama) >= MIN_SCORE, 'Panorama Rochers de Naye score ≥ MIN_SCORE');
+
+  // Un parc générique sans mots-clés géo ne doit pas passer sans rating (score = 2 < 3)
+  const genericPark = mockPlace('Parc Municipal', ['natural_feature'], { rating: null, ratingCount: null, isOpen: null });
+  assert(getFamilyActivityScore(genericPark) < MIN_SCORE, 'Parc Municipal sans keyword géo ni rating → rejeté');
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 const arg = process.argv[2];
 if (!arg || arg === 'A') testA();
@@ -465,6 +537,9 @@ if (!arg || arg === 'O') testO();
 if (!arg || arg === 'P') testP();
 if (!arg || arg === 'Q') testQ();
 if (!arg || arg === 'R') testR();
+if (!arg || arg === 'S') testS();
+if (!arg || arg === 'T') testT();
+if (!arg || arg === 'U') testU();
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`Résultat: ${passed} ✅ PASS  ${failed} ❌ FAIL`);

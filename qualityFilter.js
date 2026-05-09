@@ -30,6 +30,9 @@ const PUBLIC_POOL_RE = /piscine\s+(municipale|communale|publique|couverte|ext[e�
 // Bâtiments agricoles non visitables
 const AGRICULTURAL_NON_VISITABLE_RE = /\b(s[eé]choir|grange|hangar|entrepôt\s+agri|d[eé]p[oô]t\s+agri|bâtiment\s+agri)\b/i;
 
+// Kiosques loterie / paris sportifs
+const LOTTERY_KIOSK_RE = /\b(jeux?\s+(de\s+la\s+)?loterie|loterie\s+nationale|\bloto\b|\blotto\b|\bpmu\b|tierc[eé]|fran[cç]aise\s+des\s+jeux|\bfdj\b|paris\s+sportifs?|grattage)\b/i;
+
 // Ferme qui EST une activité famille
 const FARM_ACTIVITY_RE = /ferme\s+(p[eé]dagog|animaux?|aventure|ouverte|famille|enfants?)|parc\s+animalier|autocueillette|cueillette\s+famille/i;
 
@@ -63,6 +66,7 @@ function getFamilyActivityScore(place) {
   if (isPoolShop(place)) return -5;
   if (isAgriculturalNonVisitable(place)) return -5;
   if (BUSINESS_ENTITY_RE.test(name)) return -4;
+  if (LOTTERY_KIOSK_RE.test(name)) return -5;
 
   let score = 0;
 
@@ -73,7 +77,7 @@ function getFamilyActivityScore(place) {
 
   // Nom d'activité famille claire
   if (/ferme\s+p[eé]dagog|parc\s+(de\s+loisirs?|animalier|d['']attract)|aire\s+de\s+jeux|ludoth[eè]que|piscine\s+(municipale|publique|communale)|centre\s+aquatique|trampoline\s+(park|zone|parc)/i.test(name)) score += 2;
-  else if (/patinoire|bowling|escalade|trampoline|cin[eé]ma|biblioth[eè]que|mus[eé]e|zoo|aquarium|randonn[eé]e|sentier|grotte|caverne|belv[eé]d[eè]re|aire\s+de\s+jeux|laser[\s-]?game|escape\s*room|karting|kart\b|accrobranche|[eé]quitation|poneys?|mini[\s-]?golf|\bski\b|luge|spectacle\s+(jeunesse|enfants?)|marionnettes?/i.test(name)) score += 1;
+  else if (/patinoire|bowling|escalade|trampoline|cin[eé]ma|biblioth[eè]que|mus[eé]e|zoo|aquarium|randonn[eé]e|sentier|grotte|caverne|belv[eé]d[eè]re|aire\s+de\s+jeux|laser[\s-]?game|escape\s*room|karting|kart\b|accrobranche|[eé]quitation|poneys?|mini[\s-]?golf|\bski\b|luge|spectacle\s+(jeunesse|enfants?)|marionnettes?|(see|berg|alp|horn|pass|gletscher|schlucht)\b|\blac\b|alpage|gorge|cascade|chute|canyon|\bcol\b|glacier|panorama|vue\s+sur/i.test(name)) score += 1;
 
   // Note correcte
   if (rating != null && rating >= 3.5) score += 1;
@@ -99,6 +103,7 @@ function getRejectReason(place, score) {
   if (isPoolShop(place)) return 'pool_shop';
   if (isAgriculturalNonVisitable(place)) return 'agricultural_building';
   if (BUSINESS_ENTITY_RE.test(place.name ?? '')) return 'business_entity';
+  if (LOTTERY_KIOSK_RE.test(place.name ?? '')) return 'lottery_kiosk';
   if (score < MIN_SCORE) return 'low_family_activity_score';
   return null;
 }

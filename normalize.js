@@ -42,6 +42,7 @@ function deduplicate(places) {
   const seenIds = new Set();
   const seenKeys = new Set();
   const seenNameKeys = new Set();
+  const seenCoordKeys = new Set();
   return places.filter(p => {
     if (seenIds.has(p.sourceId)) {
       console.log(`[dedupe] removed_duplicate reason=placeId name="${p.name}"`);
@@ -56,9 +57,17 @@ function deduplicate(places) {
       console.log(`[dedupe] removed_duplicate reason=name_similarity name="${p.name}"`);
       return false;
     }
+    const coordKey = (p.lat != null && p.lon != null)
+      ? `${Math.round(p.lat * 10000)},${Math.round(p.lon * 10000)}`
+      : null;
+    if (coordKey && seenCoordKeys.has(coordKey)) {
+      console.log(`[dedupe] removed_duplicate reason=same_coordinates name="${p.name}"`);
+      return false;
+    }
     seenIds.add(p.sourceId);
     if (p.normalizedKey) seenKeys.add(p.normalizedKey);
     if (nk.length >= 6) seenNameKeys.add(nk);
+    if (coordKey) seenCoordKeys.add(coordKey);
     return true;
   });
 }
