@@ -132,6 +132,44 @@ const FAMILIES = {
     forbiddenTags: ["parc d'attractions", 'lieu à découvrir'],
   },
 
+  escape_room: {
+    detect: (name, types) =>
+      /escape\s*room|room\s*escape|exit\s*(game|room)|[eé]nigmes?\s*(famille|jeu|room)|chambre\s+myst[eè]re|locked\s*room|puzzle\s+room/i.test(name),
+    category:    'Loisirs',
+    type:        'indoor',
+    icon:        '🔐',
+    effortLevel: 'Modéré',
+    weatherFit:  ['rainy', 'cold', 'unstable', 'sunny'],
+    subtitle:    "Une salle d'escape game pour résoudre des énigmes en équipe.",
+    whyGoodIdea: "Réflexion, coopération et suspense — une aventure parfaite pour toute la famille.",
+    benefit:     "Coopération et fun en famille",
+    whatToBring: ['Porte-monnaie'],
+    practicalInfos: ['Réservation obligatoire', 'Durée ~60 min par session', 'À partir de 10 ans recommandé'],
+    tags:        ['escape', 'énigme', 'jeu', 'intérieur', 'famille', 'coopération'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
+  laser_game: {
+    detect: (name, types) =>
+      /laser[\s-]?(game|tag|quest|zone|combat|battle|arena)|lasertag|laserzone/i.test(name),
+    category:    'Loisirs',
+    type:        'indoor',
+    icon:        '🔫',
+    effortLevel: 'Modéré',
+    weatherFit:  ['rainy', 'cold', 'unstable', 'sunny'],
+    subtitle:    "Une partie de laser game pour se défier et s'amuser en famille.",
+    whyGoodIdea: "Stratégie, course et fous rires garantis — idéal à partir de 6 ans.",
+    benefit:     "Action et fun en famille à l'abri",
+    whatToBring: ['Vêtements confortables', 'Eau', 'Porte-monnaie'],
+    practicalInfos: ['Réservation recommandée', 'Séances en créneaux', 'Tarifs à vérifier'],
+    tags:        ['laser', 'jeu', 'action', 'intérieur', 'famille', 'enfants'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
   bowling: {
     detect: (name, types) =>
       types.includes('bowling_alley') || /bowling|quilles/i.test(name),
@@ -271,6 +309,25 @@ const FAMILIES = {
     forbiddenTags: ['lieu à découvrir'],
   },
 
+  horse_riding: {
+    detect: (name, types) =>
+      /[eé]quitation|man[eè]ge|poney\s*club|poneys?|ranch\s+(famille|enfants?|loisirs?)|ferme\s+[eé]questre|centre\s+[eé]questre|promenade\s+(?:à\s+)?cheval|horse\s+(riding|ranch)/i.test(name),
+    category:    'Nature',
+    type:        'outdoor',
+    icon:        '🐴',
+    effortLevel: 'Modéré',
+    weatherFit:  ['sunny', 'unstable'],
+    subtitle:    "Une balade à cheval ou une initiation poney pour les enfants.",
+    whyGoodIdea: "L'équitation développe la confiance en soi — une expérience unique au contact des chevaux.",
+    benefit:     "Contact avec les chevaux et nature",
+    whatToBring: ['Chaussures fermées', 'Vêtements confortables', 'Porte-monnaie'],
+    practicalInfos: ['Réservation recommandée', 'Casque obligatoire fourni sur place', 'Adapté aux enfants'],
+    tags:        ['cheval', 'poney', 'équitation', 'nature', 'famille', 'animaux', 'extérieur'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
   zoo_animals: {
     detect: (name, types) =>
       types.includes('zoo') || types.includes('aquarium') ||
@@ -291,9 +348,49 @@ const FAMILIES = {
     forbiddenTags: ["parc d'attractions", 'lieu à découvrir'],
   },
 
+  accrobranche: {
+    detect: (name, types) =>
+      /accrobranche|acro[\s-]?branche|tyrolienne|zip[\s-]?line|parcours\s+(aventure|acrobatique|forestier|arboricole)|arbre\s+(aventure|loisirs?)|forest\s+adventure/i.test(name),
+    category:    'Sport',
+    type:        'outdoor',
+    icon:        '🌲',
+    effortLevel: 'Aventure',
+    weatherFit:  ['sunny', 'unstable'],
+    subtitle:    "Un parcours accrobranche dans les arbres pour vivre l'aventure en famille.",
+    whyGoodIdea: "Tyroliennes, ponts de singe et passages aériens — une aventure inoubliable pour petits et grands.",
+    benefit:     "Aventure et dépassement de soi en famille",
+    whatToBring: ['Vêtements confortables', 'Chaussures fermées', 'Eau', 'Porte-monnaie'],
+    practicalInfos: ['Équipement de sécurité fourni', 'Parcours adaptés par âge et taille', 'Tarifs à vérifier'],
+    tags:        ['accrobranche', 'tyrolienne', 'aventure', 'forêt', 'famille', 'sport', 'extérieur'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
+  ski_snow: {
+    detect: (name, types) =>
+      /\bski\b|snowboard|snow\s*park|luge\b|t[eé]l[eé]cabine|t[eé]l[eé]si[eè]ge|remontée\s+mécanique|piste\s+de\s+ski|ski\s+(de\s+fond|nordique)|raquettes?\s*(neige|montagne)?/i.test(name),
+    category:    'Sport',
+    type:        'outdoor',
+    icon:        '⛷️',
+    effortLevel: 'Modéré',
+    weatherFit:  ['cold', 'unstable'],
+    subtitle:    "Une journée à la neige pour skier, faire de la luge ou se balader en raquettes.",
+    whyGoodIdea: "Les activités hivernales en famille créent des souvenirs inoubliables — neige, glisse et grand air.",
+    benefit:     "Glisse et plaisirs hivernaux en famille",
+    whatToBring: ['Vêtements chauds et imperméables', 'Gants et bonnet', 'Lunettes de soleil', 'Crème solaire', 'Porte-monnaie'],
+    practicalInfos: ['Tarifs et remontées à vérifier', 'Équipement de location possible sur place'],
+    tags:        ['ski', 'neige', 'luge', 'hiver', 'montagne', 'famille', 'extérieur'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
   mountain_hike: {
     detect: (name, types) =>
       types.some(t => ['hiking_area'].includes(t)) ||
+      (types.includes('natural_feature') &&
+       /(see|berg|alp|horn|pass|gletscher|schlucht)\b|lac\b|alpage|montagne|gorge|cascade|chute|canyon|val\b|falaise|glacier|col\b|sommet|panorama|vue\s+sur/i.test(name)) ||
       /randonnée|sentier\s+(balisé|nature|familial)?|balade\s+(nature|famille|forêt|montagne)?|forêt\s+(parc|promenade)?|promenade\s+(forêt|nature|famille)|sommet\b|belvédère|viewpoint|via\s*ferrata|point\s+de\s+vue/i.test(name),
     category:    'Nature',
     type:        'outdoor',
@@ -309,6 +406,26 @@ const FAMILIES = {
     skipIsOpen:  true,
     forbiddenPracticalInfos: [/réservation recommandée/i],
     forbiddenTags: ['café', 'lieu à découvrir'],
+  },
+
+  theater_show: {
+    detect: (name, types) =>
+      types.includes('performing_arts_theater') ||
+      /th[eé][aâ]tre\s+(enfants?|jeunesse|famille)|marionnettes?|spectacle\s+(jeunesse|enfants?|famille|de\s+rue)|cirque\s+(enfants?|famille|jeunesse)|pantomime/i.test(name),
+    category:    'Culture',
+    type:        'indoor',
+    icon:        '🎭',
+    effortLevel: 'Facile',
+    weatherFit:  ['rainy', 'cold', 'unstable', 'sunny'],
+    subtitle:    "Un spectacle vivant pour éveiller l'imaginaire des enfants en famille.",
+    whyGoodIdea: "Théâtre, marionnettes ou cirque — une expérience culturelle et mémorable.",
+    benefit:     "Éveil culturel et émotions en famille",
+    whatToBring: ['Porte-monnaie'],
+    practicalInfos: ['Séances et tarifs à vérifier', 'Réservation recommandée', 'Adapté aux enfants'],
+    tags:        ['spectacle', 'théâtre', 'culture', 'famille', 'enfants', 'intérieur'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
   },
 
   library_quiet: {
@@ -370,6 +487,44 @@ const FAMILIES = {
     skipIsOpen:  false,
     forbiddenPracticalInfos: [/réservation recommandée le week-end/i],
     forbiddenTags: ['lieu à découvrir', "parc d'attractions"],
+  },
+
+  karting: {
+    detect: (name, types) =>
+      /karting|kart\b|go[\s-]?kart|circuit\s+(famille|loisirs?|enfants?|de\s+kart)|piste\s+de\s+kart/i.test(name),
+    category:    'Sport',
+    type:        'outdoor',
+    icon:        '🏎️',
+    effortLevel: 'Modéré',
+    weatherFit:  ['sunny', 'unstable'],
+    subtitle:    "Une session de karting pour vivre la vitesse en famille.",
+    whyGoodIdea: "Sensations fortes et compétition amicale — accessible dès 7 ans avec les karts enfants.",
+    benefit:     "Vitesse et sensations pour toute la famille",
+    whatToBring: ['Vêtements confortables', 'Porte-monnaie'],
+    practicalInfos: ['Équipement fourni (casque, combinaison)', 'Âge minimum selon les circuits', 'Réservation recommandée'],
+    tags:        ['karting', 'kart', 'vitesse', 'sport', 'famille', 'enfants'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
+  },
+
+  mini_golf: {
+    detect: (name, types) =>
+      /mini[\s-]?golf|minigolf|putting[\s-]?green|crazy[\s-]?golf|golf\s+(famille|enfants?|loisirs?|parc)/i.test(name),
+    category:    'Loisirs',
+    type:        'outdoor',
+    icon:        '⛳',
+    effortLevel: 'Facile',
+    weatherFit:  ['sunny', 'unstable'],
+    subtitle:    "Un parcours de mini-golf pour s'amuser en plein air en famille.",
+    whyGoodIdea: "Simple, fun et accessible à tous les âges — parfait pour une sortie décontractée.",
+    benefit:     "Jeu en plein air pour tous les âges",
+    whatToBring: ['Porte-monnaie', 'Eau'],
+    practicalInfos: ['Matériel fourni sur place', 'Tarifs à vérifier', 'Accessible dès 3 ans'],
+    tags:        ['golf', 'jeu', 'extérieur', 'famille', 'loisirs'],
+    skipIsOpen:  false,
+    forbiddenPracticalInfos: [],
+    forbiddenTags: ['lieu à découvrir'],
   },
 
   outdoor_playground: {

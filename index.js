@@ -881,7 +881,7 @@ app.post('/generer-activites', async (req, res) => {
         0: 'musée exposition grotte caverne souterrain',
         1: 'salle escalade climbing bloc trampoline aire de jeux',
         2: 'ferme pédagogique parc animalier cinéma bowling',
-        3: 'forêt randonnée balade sentier famille',
+        3: 'forêt randonnée balade sentier famille ferme animaux poney',
       };
       if (wi === 'rainy') {
         return [
@@ -889,6 +889,8 @@ app.post('/generer-activites', async (req, res) => {
           'salle escalade climbing trampoline',
           'cinéma ciné film enfants famille',
           'grotte caverne visite famille',
+          'laser game famille enfants',
+          'escape room famille enfants',
         ];
       }
       if (wi === 'cold') {
@@ -898,6 +900,8 @@ app.post('/generer-activites', async (req, res) => {
           'cinéma ciné film enfants famille',
           'grotte caverne visite famille',
           'forêt promenade parc ferme point de vue famille',
+          'spectacle théâtre marionnettes enfants',
+          'laser game famille enfants',
         ];
       }
       if (wi === 'sunny') {
@@ -909,6 +913,11 @@ app.post('/generer-activites', async (req, res) => {
           'grotte caverne visite famille',
           'trampoline park famille',
           'aire de jeux extérieure famille',
+          'mini golf famille',
+          'accrobranche tyrolienne famille',
+          'équitation poney promenade famille',
+          'ferme animaux enfants visite',
+          'lac montagne randonnée famille',
         ];
         if (byGroup[sg]) queries.push(byGroup[sg]);
         return queries;
@@ -918,6 +927,7 @@ app.post('/generer-activites', async (req, res) => {
           'piscine plage lac baignade aquarium',
           'balade ombre nature forêt parc famille',
           'aire de jeux extérieure famille',
+          'mini golf famille',
         ];
       }
       if (wi === 'unstable') {
@@ -926,6 +936,8 @@ app.post('/generer-activites', async (req, res) => {
           'bowling piscine couverte cinéma famille',
           'trampoline park famille',
           'grotte caverne visite famille',
+          'laser game famille enfants',
+          'karting famille enfants',
         ];
       }
       return byGroup[sg] ? [byGroup[sg]] : [];

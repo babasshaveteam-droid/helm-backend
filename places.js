@@ -36,6 +36,7 @@ const FIELD_MASK = [
 ].join(',');
 
 async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0, weatherIntent = null) {
+  const safeRadius = Math.min(radiusMeters, 50000); // Google searchNearby hard limit
   let types;
   if (weatherIntent === 'cold' && searchGroup >= 2) {
     const sgTypes = SEARCH_GROUPS[searchGroup % SEARCH_GROUPS.length];
@@ -59,7 +60,7 @@ async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0
       locationRestriction: {
         circle: {
           center: { latitude: lat, longitude: lon },
-          radius: radiusMeters,
+          radius: safeRadius,
         },
       },
     }),

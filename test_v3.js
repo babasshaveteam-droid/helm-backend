@@ -404,6 +404,47 @@ function testP() {
   assert(activity.category === 'Loisirs', `amusement_park_family category='${activity.category}'`);
 }
 
+// ─── Test Q — mountain_hike détecte natural_feature + nom géographique ─────────
+function testQ() {
+  console.log('\n═══ Test Q — mountain_hike natural_feature (Oeschinesee) ═══');
+  const { detectFamily } = require('./activityRules');
+
+  // Lac alpin suisse — type natural_feature + nom allemand "see"
+  const fOeschinesee = detectFamily('Oeschinesee', ['natural_feature', 'tourist_attraction', 'point_of_interest']);
+  assert(fOeschinesee === 'mountain_hike', `Oeschinesee → '${fOeschinesee}' attendu 'mountain_hike'`);
+
+  // Gorges — natural_feature + mot-clé français
+  const fGorges = detectFamily('Gorges du Durnand', ['natural_feature']);
+  assert(fGorges === 'mountain_hike', `Gorges du Durnand → '${fGorges}' attendu 'mountain_hike'`);
+
+  // Cascade
+  const fCascade = detectFamily('Cascade de Pissevache', ['natural_feature']);
+  assert(fCascade === 'mountain_hike', `Cascade de Pissevache → '${fCascade}' attendu 'mountain_hike'`);
+
+  // Parc générique sans mot-clé montagne → ne doit PAS être mountain_hike
+  const fPark = detectFamily('Parc des Lilas', ['park', 'natural_feature']);
+  assert(fPark !== 'mountain_hike', `Parc des Lilas (park+natural_feature) ne doit PAS être mountain_hike → '${fPark}'`);
+}
+
+// ─── Test R — nouvelles familles détectées ────────────────────────────────────
+function testR() {
+  console.log('\n═══ Test R — nouvelles familles (karting, laser, escape, accrobranche) ═══');
+  const { detectFamily } = require('./activityRules');
+
+  assert(detectFamily('Karting des Alpes', []) === 'karting', 'karting détecté par nom');
+  assert(detectFamily('Go Kart Family Park', []) === 'karting', 'go-kart détecté');
+  assert(detectFamily('Laser Game Zone', []) === 'laser_game', 'laser_game détecté');
+  assert(detectFamily('LaserTag Arena', []) === 'laser_game', 'lasertag détecté');
+  assert(detectFamily('Escape Room Mystère', []) === 'escape_room', 'escape_room détecté');
+  assert(detectFamily('Exit Game Family', []) === 'escape_room', 'exit game détecté');
+  assert(detectFamily('Accrobranche Aventure', []) === 'accrobranche', 'accrobranche détecté');
+  assert(detectFamily('Zip Line Forest Adventure', []) === 'accrobranche', 'zip line détecté');
+  assert(detectFamily('Centre équestre du Lac', []) === 'horse_riding', 'horse_riding détecté');
+  assert(detectFamily('Mini Golf Famille', []) === 'mini_golf', 'mini_golf détecté');
+  assert(detectFamily('Piste de Ski Les Collons', []) === 'ski_snow', 'ski_snow détecté');
+  assert(detectFamily('Spectacle jeunesse marionnettes', []) === 'theater_show', 'theater_show détecté');
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 const arg = process.argv[2];
 if (!arg || arg === 'A') testA();
@@ -422,6 +463,8 @@ if (!arg || arg === 'M') testM();
 if (!arg || arg === 'N') testN();
 if (!arg || arg === 'O') testO();
 if (!arg || arg === 'P') testP();
+if (!arg || arg === 'Q') testQ();
+if (!arg || arg === 'R') testR();
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`Résultat: ${passed} ✅ PASS  ${failed} ❌ FAIL`);
