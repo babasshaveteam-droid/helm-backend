@@ -86,7 +86,7 @@ async function fetchTargetedSearch(lat, lon, radiusMeters, apiKey, textQuery, ma
     body: JSON.stringify({
       textQuery,
       maxResultCount: maxResults,
-      locationRestriction: {
+      locationBias: {
         circle: {
           center: { latitude: lat, longitude: lon },
           radius: radiusMeters,
