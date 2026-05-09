@@ -17,9 +17,9 @@ const WEATHER_TYPES = {
     // outdoor court/familial autorisé par froid raisonnable
     'park', 'tourist_attraction', 'zoo',
   ],
-  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool'],
+  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool', 'natural_feature', 'botanical_garden', 'beach'],
   unstable: ['museum', 'library', 'cafe', 'bowling_alley', 'shopping_mall', 'park', 'swimming_pool', 'ice_skating_rink', 'gym'],
-  sunny:    ['park', 'zoo', 'aquarium', 'tourist_attraction', 'botanical_garden', 'amusement_park'],
+  sunny:    ['park', 'zoo', 'aquarium', 'tourist_attraction', 'botanical_garden', 'amusement_park', 'natural_feature', 'beach'],
 };
 
 // Only request the fields we actually use — minimises cost and payload
@@ -104,4 +104,4 @@ async function fetchTargetedSearch(lat, lon, radiusMeters, apiKey, textQuery, ma
   return data.places ?? [];
 }
 
-module.exports = { fetchNearbyPlaces, fetchTargetedSearch };
+module.exports = { fetchNearbyPlaces, fetchTargetedSearch, WEATHER_TYPES, SEARCH_GROUPS };

@@ -289,6 +289,68 @@ function testL() {
   assert(getRejectReason(sechoir, s1) === 'agricultural_building', `Raison séchoir = ${getRejectReason(sechoir, s1)}`);
 }
 
+// ─── Test M — Rescue sans filtre qualité ──────────────────────────────────────
+function testM() {
+  console.log('\n═══ Test M — Rescue sans filtre qualité ═══');
+  // Parc rural avec peu d'avis : score < MIN_SCORE mais vrai lieu famille
+  const parcRural = mockPlace('Parc du village', ['park', 'point_of_interest'], { rating: null, ratingCount: null });
+  const score = getFamilyActivityScore(parcRural);
+  assert(score < MIN_SCORE, `Score parc rural = ${score} < ${MIN_SCORE} (filterFamilyActivities le rejetterait)`);
+
+  // isFamilyPlace l'accepte (c'est un park, pas bloqué)
+  assert(isFamilyPlace(parcRural), 'isFamilyPlace accepte le parc rural');
+
+  // Le rescue utilise seulement isFamilyPlace — simulation
+  const rescueCandidates = [parcRural].filter(isFamilyPlace);
+  assert(rescueCandidates.length === 1, 'Rescue retourne 1 lieu (isFamilyPlace seul, pas filterFamilyActivities)');
+
+  // Contrôle : filterFamilyActivities le rejette (valide la nécessité du fix)
+  const strictFilter = filterFamilyActivities([parcRural]);
+  assert(strictFilter.length === 0, 'filterFamilyActivities rejetterait ce lieu (confirme besoin du fix rescue)');
+}
+
+// ─── Test N — 22°C sunny — Text Search outdoor ────────────────────────────────
+function testN() {
+  console.log('\n═══ Test N — 22°C sunny — Text Search outdoor ═══');
+  // Simuler getTargetedSearches pour weatherIntent=sunny
+  const { WEATHER_TYPES } = require('./places');
+
+  assert(WEATHER_TYPES.sunny.includes('natural_feature'), 'WEATHER_TYPES.sunny inclut natural_feature');
+  assert(WEATHER_TYPES.sunny.includes('beach'), 'WEATHER_TYPES.sunny inclut beach');
+  assert(WEATHER_TYPES.hot.includes('natural_feature'), 'WEATHER_TYPES.hot inclut natural_feature');
+  assert(WEATHER_TYPES.hot.includes('beach'), 'WEATHER_TYPES.hot inclut beach');
+
+  // Simuler getTargetedSearches inline (reproduit la logique de index.js)
+  function getTargetedSearches(sg, wi) {
+    const byGroup = {
+      0: 'musée exposition grotte caverne souterrain',
+      1: 'salle escalade climbing bloc trampoline',
+      2: 'ferme pédagogique parc animalier cinéma bowling',
+      3: 'forêt balade jardin botanique sentier',
+    };
+    if (wi === 'sunny') {
+      const queries = [
+        'ferme pédagogique parc animalier zoo',
+        'forêt balade jardin famille',
+        'lac plage baignade famille',
+        'balade montagne point de vue famille',
+      ];
+      if (byGroup[sg]) queries.push(byGroup[sg]);
+      return queries;
+    }
+    return [];
+  }
+
+  const queries0 = getTargetedSearches(0, 'sunny');
+  const queries2 = getTargetedSearches(2, 'sunny');
+
+  assert(queries0.some(q => /lac|plage|baignade/.test(q)), 'Text Search sunny inclut lac/plage/baignade');
+  assert(queries0.some(q => /montagne|point de vue|balade/.test(q)), 'Text Search sunny inclut montagne/point de vue');
+  assert(queries0.some(q => /grotte|musée|exposition/.test(q)), 'Text Search sunny groupe 0 inclut culture (byGroup)');
+  assert(queries2.some(q => /cinéma|bowling|parc animalier/.test(q)), 'Text Search sunny groupe 2 inclut loisirs (byGroup)');
+  assert(queries0.length === 5, `Text Search sunny groupe 0 = ${queries0.length} requêtes (attendu 5)`);
+}
+
 // ─── Runner ───────────────────────────────────────────────────────────────────
 const arg = process.argv[2];
 if (!arg || arg === 'A') testA();
@@ -303,6 +365,8 @@ if (!arg || arg === 'I') testI();
 if (!arg || arg === 'J') testJ();
 if (!arg || arg === 'K') testK();
 if (!arg || arg === 'L') testL();
+if (!arg || arg === 'M') testM();
+if (!arg || arg === 'N') testN();
 
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`Résultat: ${passed} ✅ PASS  ${failed} ❌ FAIL`);

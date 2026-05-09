@@ -798,7 +798,7 @@ app.post('/generer-activites', async (req, res) => {
 
   const weatherIntent = getWeatherIntent(weatherCondition, weatherTemp);
   console.log(`[backend] /generer-activites — lat=${latitude} lon=${longitude} radius=${radiusMeters} group=${searchGroup}`);
-  console.log(`[backend] weatherIntent=${weatherIntent} (cond=${weatherCondition ?? 'n/a'}, temp=${weatherTemp ?? 'n/a'}°C)`);
+  console.log(`[weather] temp=${weatherTemp ?? 'n/a'}°C condition=${weatherCondition ?? 'n/a'} priority=${weatherIntent}`);
 
   // 1. Validate coordinates
   if (
@@ -877,6 +877,12 @@ app.post('/generer-activites', async (req, res) => {
 
     // 4a. Recherches ciblées météo-aware — max 2 queries par requête
     function getTargetedSearches(sg, wi) {
+      const byGroup = {
+        0: 'musée exposition grotte caverne souterrain',
+        1: 'salle escalade climbing bloc trampoline',
+        2: 'ferme pédagogique parc animalier cinéma bowling',
+        3: 'forêt balade jardin botanique sentier',
+      };
       if (wi === 'rainy') {
         return [
           'ludothèque bibliothèque jeunesse enfants',
@@ -893,20 +899,27 @@ app.post('/generer-activites', async (req, res) => {
         ];
       }
       if (wi === 'sunny') {
-        return [
+        const queries = [
           'ferme pédagogique parc animalier zoo',
           'forêt balade jardin famille',
+          'lac plage baignade famille',
+          'balade montagne point de vue famille',
         ];
+        if (byGroup[sg]) queries.push(byGroup[sg]);
+        return queries;
       }
       if (wi === 'hot') {
-        return ['piscine plage lac baignade aquarium'];
+        return [
+          'piscine plage lac baignade aquarium',
+          'balade ombre nature forêt parc famille',
+        ];
       }
-      const byGroup = {
-        0: 'musée exposition grotte caverne souterrain',
-        1: 'salle escalade climbing bloc trampoline',
-        2: 'ferme pédagogique parc animalier cinéma bowling',
-        3: 'forêt balade jardin botanique sentier',
-      };
+      if (wi === 'unstable') {
+        return [
+          'ludothèque bibliothèque jeunesse enfants',
+          'bowling piscine couverte cinéma famille',
+        ];
+      }
       return byGroup[sg] ? [byGroup[sg]] : [];
     }
     const targetedSearches = getTargetedSearches(searchGroup, weatherIntent);
@@ -978,6 +991,7 @@ app.post('/generer-activites', async (req, res) => {
     });
     console.log(`[proximity] Candidats triés: ${fresh.slice(0, 3).map(p => p.name + ' (' + (p.lat != null ? haversineKm(latitude, longitude, p.lat, p.lon).toFixed(1) : '?') + 'km)').join(', ')}`);
 
+    console.log(`[refresh] count=${refreshCount} radius=${radiusMeters} searchGroup=${searchGroup} excludeCount=${excludeSet.size}`);
     candidates = fresh.slice(0, 8);
     if (!candidates.length) {
       // All nearby places are excluded — serve raw fallback without exclusion
@@ -1101,7 +1115,7 @@ app.post('/generer-activites', async (req, res) => {
           latitude, longitude, 80000, GOOGLE_PLACES_API_KEY, rescueGroup, null
         );
         console.log(`[places] rescue: ${rescueRaw.length} lieux (radius=80km group=${rescueGroup})`);
-        const rescuePlaces = filterFamilyActivities(deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace));
+        const rescuePlaces = deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace);
         if (rescuePlaces.length > 0) {
           const rescueActivities = placesToFallback(rescuePlaces, latitude, longitude, weatherIntent);
           rescued = rescueActivities.map(normalizeActivityForDisplay).filter(Boolean).filter(validateNearbyActivity);
