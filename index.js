@@ -685,6 +685,76 @@ function validateNearbyActivity(activity) {
   return true;
 }
 
+// ─── Weather validation finale — filtre les activités outdoor inadaptées ───────
+// Chercher large (getTargetedSearches) → afficher intelligemment (ici).
+function filterActivitiesByWeather(activities, weatherIntent, userLat, userLon) {
+  if (!weatherIntent || weatherIntent === 'sunny' || weatherIntent === 'neutral') {
+    return activities;
+  }
+  return activities.filter(a => {
+    const type   = (a.type || 'outdoor').toLowerCase();
+    const effort = a.effortLevel || 'Facile';
+    const name   = a.titre || a.locationName || '?';
+    const km     = (a.latitude != null && a.longitude != null && userLat != null && userLon != null)
+      ? haversineKm(userLat, userLon, a.latitude, a.longitude)
+      : null;
+
+    // Indoor / mixed → toujours autorisé
+    if (type === 'indoor' || type === 'mixed') return true;
+
+    // outdoor depuis ici
+    if (weatherIntent === 'rainy') {
+      console.log(`[weather] rejected_outdoor reason=rainy name="${name}"`);
+      return false;
+    }
+    if (weatherIntent === 'cold') {
+      if (effort === 'Aventure') {
+        console.log(`[weather] rejected_outdoor reason=cold effort=Aventure name="${name}"`);
+        return false;
+      }
+      // "randonnée" Moyen ou Aventure → trop exposé par froid
+      if (/\brandonnée\b/i.test(name) && effort !== 'Facile') {
+        console.log(`[weather] rejected_outdoor reason=cold_hike name="${name}"`);
+        return false;
+      }
+      console.log(`[weather] allowed_outdoor reason=short_near_easy name="${name}"`);
+      return true;
+    }
+    if (weatherIntent === 'unstable') {
+      if (effort === 'Aventure') {
+        console.log(`[weather] rejected_outdoor reason=unstable effort=Aventure name="${name}"`);
+        return false;
+      }
+      // "randonnée" Moyen → trop exposé par temps instable quelle que soit la distance
+      if (/\brandonnée\b/i.test(name) && effort !== 'Facile') {
+        console.log(`[weather] rejected_outdoor reason=unstable_hike name="${name}"`);
+        return false;
+      }
+      if (effort === 'Moyen' && km !== null && km > 25) {
+        console.log(`[weather] rejected_outdoor reason=unstable effort=Moyen km=${km.toFixed(1)} name="${name}"`);
+        return false;
+      }
+      console.log(`[weather] allowed_outdoor reason=short_near_easy name="${name}"`);
+      return true;
+    }
+    if (weatherIntent === 'hot') {
+      const isWaterOrShade = /\b(lac|plage|piscine|baignade|for[eê]t|bois|ombre|aquatique)\b/i.test(
+        `${a.titre || ''} ${a.category || ''} ${a.locationName || ''}`
+      );
+      if (isWaterOrShade) {
+        console.log(`[weather] allowed_outdoor reason=water_or_shade name="${name}"`);
+        return true;
+      }
+      if (effort === 'Aventure') {
+        console.log(`[weather] rejected_outdoor reason=hot_exposed effort=Aventure name="${name}"`);
+        return false;
+      }
+      return true;
+    }
+    return true;
+  });
+}
+
 function sendNearbyActivities(res, activities) {
   if (res.headersSent) return;
   const list = Array.isArray(activities) ? activities : [activities];
@@ -875,7 +945,8 @@ app.post('/generer-activites', async (req, res) => {
     const normalized = rawPlaces.map(normalizePlace);
     let deduped = filterFamilyActivities(deduplicate(normalized).filter(isFamilyPlace));
 
-    // 4a. Recherches ciblées météo-aware — max 2 queries par requête
+    // 4a. Recherches ciblées météo-aware
+    // Règle : chercher large, filtrer ensuite par filterActivitiesByWeather.
     function getTargetedSearches(sg, wi) {
       const byGroup = {
         0: 'musée exposition grotte caverne souterrain',
@@ -899,7 +970,9 @@ app.post('/generer-activites', async (req, res) => {
           'salle escalade climbing trampoline',
           'cinéma ciné film enfants famille',
           'grotte caverne visite famille',
-          'forêt promenade parc ferme point de vue famille',
+          'ferme pédagogique animaux enfants famille',
+          'forêt promenade courte famille',
+          'balade montagne courte point de vue',
           'spectacle théâtre marionnettes enfants',
           'laser game famille enfants',
         ];
@@ -926,6 +999,7 @@ app.post('/generer-activites', async (req, res) => {
         return [
           'piscine plage lac baignade aquarium',
           'balade ombre nature forêt parc famille',
+          'ferme pédagogique animaux enfants',
           'aire de jeux extérieure famille',
           'mini golf famille',
         ];
@@ -937,8 +1011,24 @@ app.post('/generer-activites', async (req, res) => {
           'trampoline park famille',
           'grotte caverne visite famille',
           'laser game famille enfants',
-          'karting famille enfants',
+          'ferme pédagogique animaux enfants famille',
+          'forêt promenade courte famille',
+          'balade montagne point de vue famille',
         ];
+      }
+      if (wi === 'neutral') {
+        const queries = [
+          'ferme pédagogique parc animalier zoo',
+          'forêt balade sentier famille',
+          'balade montagne point de vue famille',
+          'équitation poney promenade famille',
+          'lac randonnée balade famille',
+          'grotte caverne visite famille',
+          'trampoline park famille',
+          'musée exposition famille',
+        ];
+        if (byGroup[sg]) queries.push(byGroup[sg]);
+        return queries;
       }
       return byGroup[sg] ? [byGroup[sg]] : [];
     }
@@ -1107,6 +1197,15 @@ app.post('/generer-activites', async (req, res) => {
       enrichedActivities = placesToFallback(candidates, latitude, longitude, weatherIntent);
     }
     } // end else (useOpenRouter)
+
+    // Weather validation finale — rejette les outdoor inadaptés à la météo
+    if (Array.isArray(enrichedActivities) && enrichedActivities.length) {
+      const beforeWeather = enrichedActivities.length;
+      enrichedActivities = filterActivitiesByWeather(enrichedActivities, weatherIntent, latitude, longitude);
+      if (enrichedActivities.length < beforeWeather) {
+        console.log(`[weather] filtered ${beforeWeather - enrichedActivities.length} activité(s) outdoor non adaptées (intent=${weatherIntent})`);
+      }
+    }
 
     // Normaliser, valider, mettre en cache et envoyer
     const seenFinalIds = new Set();

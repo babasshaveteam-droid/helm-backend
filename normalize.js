@@ -38,36 +38,76 @@ function nameKey(name) {
     .trim();
 }
 
+// Returns distance in metres between two WGS-84 points (Haversine)
+function distMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+    * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// True if nameKey A is a prefix of B or vice-versa (min 6 chars)
+function namePrefixMatch(nkA, nkB) {
+  const len = Math.min(nkA.length, nkB.length);
+  if (len < 6) return false;
+  return nkA.startsWith(nkB.slice(0, len)) || nkB.startsWith(nkA.slice(0, len));
+}
+
 function deduplicate(places) {
-  const seenIds = new Set();
-  const seenKeys = new Set();
-  const seenNameKeys = new Set();
-  const seenCoordKeys = new Set();
+  const seenIds       = new Set();
+  const seenKeys      = new Set();
+  const seenNameKeys  = new Set();
+  const seenAddrKeys  = new Map(); // addrKey → nameKey du premier vu
+  const seenCoords    = [];        // [{lat, lon, nk, addrKey}]
+
   return places.filter(p => {
+    // 1. Same source ID
     if (seenIds.has(p.sourceId)) {
       console.log(`[dedupe] removed_duplicate reason=placeId name="${p.name}"`);
       return false;
     }
+    // 2. Same normalizedKey (name+address)
     if (p.normalizedKey && seenKeys.has(p.normalizedKey)) {
       console.log(`[dedupe] removed_duplicate reason=normalizedKey name="${p.name}"`);
       return false;
     }
     const nk = nameKey(p.name);
+    // 3. Same name (after article removal)
     if (nk.length >= 6 && seenNameKeys.has(nk)) {
       console.log(`[dedupe] removed_duplicate reason=name_similarity name="${p.name}"`);
       return false;
     }
-    const coordKey = (p.lat != null && p.lon != null)
-      ? `${Math.round(p.lat * 10000)},${Math.round(p.lon * 10000)}`
-      : null;
-    if (coordKey && seenCoordKeys.has(coordKey)) {
-      console.log(`[dedupe] removed_duplicate reason=same_coordinates name="${p.name}"`);
-      return false;
+    // 4. Same normalised address with name-prefix guard
+    const addrKey = normalizeKey(p.address);
+    if (addrKey.length >= 8 && addrKey !== 'adresseinconnue') {
+      const existingNk = seenAddrKeys.get(addrKey);
+      if (existingNk !== undefined && namePrefixMatch(existingNk, nk)) {
+        console.log(`[dedupe] removed_duplicate reason=same_address name="${p.name}"`);
+        return false;
+      }
     }
+    // 5. Nearby coordinates (~50 m) with secondary signal
+    if (p.lat != null && p.lon != null) {
+      for (const seen of seenCoords) {
+        if (distMeters(p.lat, p.lon, seen.lat, seen.lon) < 50) {
+          const nameMatch = namePrefixMatch(nk, seen.nk);
+          const addrMatch = addrKey.length >= 8 && addrKey === seen.addrKey;
+          if (nameMatch || addrMatch) {
+            console.log(`[dedupe] removed_duplicate reason=nearby_coordinates name="${p.name}"`);
+            return false;
+          }
+        }
+      }
+    }
+
     seenIds.add(p.sourceId);
     if (p.normalizedKey) seenKeys.add(p.normalizedKey);
     if (nk.length >= 6) seenNameKeys.add(nk);
-    if (coordKey) seenCoordKeys.add(coordKey);
+    if (addrKey.length >= 8 && addrKey !== 'adresseinconnue') seenAddrKeys.set(addrKey, nk);
+    if (p.lat != null && p.lon != null) seenCoords.push({ lat: p.lat, lon: p.lon, nk, addrKey });
     return true;
   });
 }
