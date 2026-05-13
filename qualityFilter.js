@@ -39,6 +39,22 @@ const FARM_ACTIVITY_RE = /ferme\s+(p[eé]dagog|animaux?|aventure|ouverte|famille
 // Entités business / sociétés / services techniques
 const BUSINESS_ENTITY_RE = /\b(sarl|sas|sa\b|gmbh|s\.r\.l\.|soci[eé]t[eé]|construction|r[eé]novation|travaux|maçonnerie|couverture|menuiserie|charpente|isolation|vitrage|carrelage|peinture\s+(int|ext)|[eé]lectricit[eé]\s+s[a-z]{2,4}\b|plomberie\s+s[a-z]{2,4}\b|chauffage\s+s[a-z]{2,4}\b|ventilation\s+s[a-z]{2,4}\b|signalisation|transport\s+(sarl|sas|sa))\b/i;
 
+// Catégories interdites par type Google — §31 : banque, pharmacie, garage, parking, admin
+const FORBIDDEN_SERVICE_TYPES = new Set([
+  'bank', 'atm', 'pharmacy', 'drugstore',
+  'gas_station', 'parking',
+  'local_government_office', 'city_hall', 'courthouse',
+  'police', 'fire_station',
+  'hospital', 'doctor', 'dentist',
+  'real_estate_agency', 'insurance_agency', 'lawyer', 'accountant',
+  'car_repair', 'car_dealer', 'car_wash',
+]);
+
+function isForbiddenService(place) {
+  const types = Array.isArray(place.types) ? place.types : [];
+  return types.some(t => FORBIDDEN_SERVICE_TYPES.has(t));
+}
+
 function isPoolShop(place) {
   const name = place.name ?? '';
   if (POOL_SHOP_RE.test(name)) return true;
@@ -64,6 +80,7 @@ function getFamilyActivityScore(place) {
   // Rejets immédiats — score non pertinent
   if (businessStatus === 'CLOSED_PERMANENTLY') return -999;
   if (isOpen === false) return -999; // fermé maintenant → §30
+  if (isForbiddenService(place)) return -999; // catégorie interdite → §31
   if (isPoolShop(place)) return -5;
   if (isAgriculturalNonVisitable(place)) return -5;
   if (BUSINESS_ENTITY_RE.test(name)) return -4;
@@ -80,16 +97,18 @@ function getFamilyActivityScore(place) {
   if (/ferme\s+p[eé]dagog|parc\s+(de\s+loisirs?|animalier|d['']attract)|aire\s+de\s+jeux|ludoth[eè]que|piscine\s+(municipale|publique|communale)|centre\s+aquatique|trampoline\s+(park|zone|parc)/i.test(name)) score += 2;
   else if (/patinoire|bowling|escalade|trampoline|cin[eé]ma|biblioth[eè]que|mus[eé]e|zoo|aquarium|randonn[eé]e|sentier|grotte|caverne|belv[eé]d[eè]re|aire\s+de\s+jeux|laser[\s-]?game|escape\s*room|karting|kart\b|accrobranche|[eé]quitation|poneys?|mini[\s-]?golf|\bski\b|luge|spectacle\s+(jeunesse|enfants?)|marionnettes?|(see|berg|alp|horn|pass|gletscher|schlucht)\b|\blac\b|alpage|gorge|cascade|chute|canyon|\bcol\b|glacier|panorama|vue\s+sur/i.test(name)) score += 1;
 
-  // Note correcte
-  if (rating != null && rating >= 3.5) score += 1;
-  // Avis nombreux
-  if (ratingCount != null && ratingCount >= 10) score += 1;
+  // Note correcte — §31 : >= 4.0
+  if (rating != null && rating >= 4.0) score += 1;
+  // Avis nombreux — §31 : >= 20
+  if (ratingCount != null && ratingCount >= 20) score += 1;
+  // Adresse / coordonnées fiables — §31
+  if (place.address || (place.lat != null && place.lon != null)) score += 1;
   // Horaires : +1 si ouvert, -2 si inconnus, §30/§31
   if (isOpen === true) score += 1;
   else if (isOpen === null) score -= 2;
 
-  // Pénalité : type commercial
-  if (types.some(t => NEGATIVE_COMMERCIAL_TYPES.has(t))) score -= 4;
+  // Pénalité : type commercial — §31 : -5
+  if (types.some(t => NEGATIVE_COMMERCIAL_TYPES.has(t))) score -= 5;
 
   // Pénalité : seulement point_of_interest/establishment (trop générique)
   const meaningful = types.filter(t => !['point_of_interest', 'establishment'].includes(t));
@@ -103,6 +122,7 @@ const MIN_SCORE = 3;
 function getRejectReason(place, score) {
   if (place.businessStatus === 'CLOSED_PERMANENTLY') return 'closed_permanently';
   if (place.isOpen === false) return 'closed_now';
+  if (isForbiddenService(place)) return 'forbidden_category';
   if (isPoolShop(place)) return 'pool_shop';
   if (isAgriculturalNonVisitable(place)) return 'agricultural_building';
   if (BUSINESS_ENTITY_RE.test(place.name ?? '')) return 'business_entity';
@@ -119,6 +139,7 @@ function filterFamilyActivities(places) {
     if (reason) {
       console.log(`[quality] rejected reason=${reason} score=${score} name="${p.name}"`);
     } else {
+      console.log(`[quality] accepted score=${score} name="${p.name}"`);
       if (p.isOpen === null) {
         console.log(`[quality] warning reason=unknown_opening_hours name="${p.name}"`);
       }
