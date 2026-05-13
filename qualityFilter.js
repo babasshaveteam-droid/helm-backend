@@ -30,8 +30,8 @@ const PUBLIC_POOL_RE = /piscine\s+(municipale|communale|publique|couverte|ext[e�
 // Bâtiments agricoles non visitables
 const AGRICULTURAL_NON_VISITABLE_RE = /\b(s[eé]choir|grange|hangar|entrepôt\s+agri|d[eé]p[oô]t\s+agri|bâtiment\s+agri)\b/i;
 
-// Kiosques loterie / paris sportifs
-const LOTTERY_KIOSK_RE = /\b(jeux?\s+(de\s+la\s+)?loterie|loterie\s+nationale|\bloto\b|\blotto\b|\bpmu\b|tierc[eé]|fran[cç]aise\s+des\s+jeux|\bfdj\b|paris\s+sportifs?|grattage)\b/i;
+// Kiosques loterie / paris sportifs — inclut variantes suisses
+const LOTTERY_KIOSK_RE = /\b(jeux?\s+(de\s+la\s+)?loterie|loterie\s+romande|loterie\s+nationale|\bloterie\b|\bloto\b|\blotto\b|\bpmu\b|tierc[eé]|fran[cç]aise\s+des\s+jeux|\bfdj\b|paris\s+sportifs?|grattage|swisslos|point\s+de\s+vente\s+loterie|kiosque\s+loterie)\b/i;
 
 // Ferme qui EST une activité famille
 const FARM_ACTIVITY_RE = /ferme\s+(p[eé]dagog|animaux?|aventure|ouverte|famille|enfants?)|parc\s+animalier|autocueillette|cueillette\s+famille/i;
@@ -63,6 +63,7 @@ function getFamilyActivityScore(place) {
 
   // Rejets immédiats — score non pertinent
   if (businessStatus === 'CLOSED_PERMANENTLY') return -999;
+  if (isOpen === false) return -999; // fermé maintenant → §30
   if (isPoolShop(place)) return -5;
   if (isAgriculturalNonVisitable(place)) return -5;
   if (BUSINESS_ENTITY_RE.test(name)) return -4;
@@ -83,8 +84,9 @@ function getFamilyActivityScore(place) {
   if (rating != null && rating >= 3.5) score += 1;
   // Avis nombreux
   if (ratingCount != null && ratingCount >= 10) score += 1;
-  // Horaires renseignés
-  if (isOpen !== null) score += 1;
+  // Horaires : +1 si ouvert, -2 si inconnus, §30/§31
+  if (isOpen === true) score += 1;
+  else if (isOpen === null) score -= 2;
 
   // Pénalité : type commercial
   if (types.some(t => NEGATIVE_COMMERCIAL_TYPES.has(t))) score -= 4;
@@ -99,11 +101,12 @@ function getFamilyActivityScore(place) {
 const MIN_SCORE = 3;
 
 function getRejectReason(place, score) {
-  if (place.businessStatus === 'CLOSED_PERMANENTLY') return 'permanently_closed';
+  if (place.businessStatus === 'CLOSED_PERMANENTLY') return 'closed_permanently';
+  if (place.isOpen === false) return 'closed_now';
   if (isPoolShop(place)) return 'pool_shop';
   if (isAgriculturalNonVisitable(place)) return 'agricultural_building';
   if (BUSINESS_ENTITY_RE.test(place.name ?? '')) return 'business_entity';
-  if (LOTTERY_KIOSK_RE.test(place.name ?? '')) return 'lottery_kiosk';
+  if (LOTTERY_KIOSK_RE.test(place.name ?? '')) return 'lottery';
   if (score < MIN_SCORE) return 'low_family_activity_score';
   return null;
 }
@@ -116,6 +119,9 @@ function filterFamilyActivities(places) {
     if (reason) {
       console.log(`[quality] rejected reason=${reason} score=${score} name="${p.name}"`);
     } else {
+      if (p.isOpen === null) {
+        console.log(`[quality] warning reason=unknown_opening_hours name="${p.name}"`);
+      }
       accepted.push(p);
     }
   }
