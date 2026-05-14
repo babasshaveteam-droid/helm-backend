@@ -27,6 +27,11 @@ const POOL_SHOP_RE = /\b(pisciniste|piscinerie|piscin\s*shop|vendeur\s+de\s+pisc
 // Vraie piscine publique / centre aquatique
 const PUBLIC_POOL_RE = /piscine\s+(municipale|communale|publique|couverte|ext[eé]rieure|d[eé]couverte|plein\s+air|d['']été)|centre\s+aquatique|espace\s+aquatique|parc\s+aquatique|bains\s+publics/i;
 
+// Espaces naturels publics — pas d'horaires Google → exempt de la pénalité isOpen=null
+const OUTDOOR_PUBLIC_TYPES = new Set([
+  'park', 'natural_feature', 'beach', 'campground',
+]);
+
 // Bâtiments agricoles non visitables
 const AGRICULTURAL_NON_VISITABLE_RE = /\b(s[eé]choir|grange|hangar|entrepôt\s+agri|d[eé]p[oô]t\s+agri|bâtiment\s+agri)\b/i;
 
@@ -103,9 +108,10 @@ function getFamilyActivityScore(place) {
   if (ratingCount != null && ratingCount >= 20) score += 1;
   // Adresse / coordonnées fiables — §31
   if (place.address || (place.lat != null && place.lon != null)) score += 1;
-  // Horaires : +1 si ouvert, -2 si inconnus, §30/§31
+  // Horaires : +1 si ouvert, -2 si inconnus (exempt pour espaces naturels publics sans horaires)
+  const isOutdoorPublic = types.some(t => OUTDOOR_PUBLIC_TYPES.has(t));
   if (isOpen === true) score += 1;
-  else if (isOpen === null) score -= 2;
+  else if (isOpen === null && !isOutdoorPublic) score -= 2;
 
   // Pénalité : type commercial — §31 : -5
   if (types.some(t => NEGATIVE_COMMERCIAL_TYPES.has(t))) score -= 5;
