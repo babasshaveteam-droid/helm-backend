@@ -36,11 +36,12 @@ if (!OPENROUTER_KEY) throw new Error('OPENROUTER_KEY manquante');
 const ACTIVITY_CACHE = new Map();
 const CACHE_TTL_MS = 20 * 60 * 1000;
 
-function getCacheKey(lat, lon, weatherIntent, radiusMeters, searchGroup, exclude) {
+function getCacheKey(lat, lon, weatherIntent, radiusMeters, searchGroup, exclude, activityIntent) {
   const latR = Math.round(lat * 100) / 100;
   const lonR = Math.round(lon * 100) / 100;
   const excKey = exclude.length === 0 ? '' : '|' + [...exclude].sort().join(',');
-  return `${latR},${lonR}|${weatherIntent}|${radiusMeters}|${searchGroup}${excKey}`;
+  const intentKey = activityIntent ? `|intent:${activityIntent}` : '';
+  return `${latR},${lonR}|${weatherIntent}|${radiusMeters}|${searchGroup}${intentKey}${excKey}`;
 }
 
 function getCached(key) {
@@ -864,10 +865,11 @@ app.post('/generer-activites', async (req, res) => {
     filters,
     searchGroup = 0,
     refreshCount = 0,
+    activityIntent = null,
   } = req.body;
 
   const weatherIntent = getWeatherIntent(weatherCondition, weatherTemp);
-  console.log(`[backend] /generer-activites — lat=${latitude} lon=${longitude} radius=${radiusMeters} group=${searchGroup}`);
+  console.log(`[backend] /generer-activites — lat=${latitude} lon=${longitude} radius=${radiusMeters} group=${searchGroup} intent=${activityIntent ?? 'general'}`);
   console.log(`[weather] temp=${weatherTemp ?? 'n/a'}°C condition=${weatherCondition ?? 'n/a'} priority=${weatherIntent}`);
 
   // 1. Validate coordinates
@@ -888,7 +890,7 @@ app.post('/generer-activites', async (req, res) => {
 
   // 2b. Cache check — retourner immédiatement si même zone/météo/groupe déjà enrichi
   const excludeArr = Array.isArray(exclude) ? exclude : [];
-  const cacheKey = getCacheKey(latitude, longitude, weatherIntent, radiusMeters, searchGroup, excludeArr);
+  const cacheKey = getCacheKey(latitude, longitude, weatherIntent, radiusMeters, searchGroup, excludeArr, activityIntent);
   console.log(`[refresh] count=${refreshCount} radius_used=${radiusMeters} searchGroup=${searchGroup} excludeCount=${excludeArr.length}`);
   console.log(`[distance] initial_nearest_search=${radiusMeters <= 2000}`);
   const cachedResult = getCached(cacheKey);
@@ -917,7 +919,7 @@ app.post('/generer-activites', async (req, res) => {
     // 3. Google Places Nearby Search
     let rawPlaces;
     try {
-      rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup, weatherIntent);
+      rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup, weatherIntent, activityIntent);
       console.log(`[places] nearbyResults=${rawPlaces.length} (group=${searchGroup} radius=${radiusMeters}m)`);
     } catch (placesErr) {
       console.error('[backend] Google Places échoue:', placesErr.message, '→ réponse vide');
@@ -945,15 +947,60 @@ app.post('/generer-activites', async (req, res) => {
     const normalized = rawPlaces.map(normalizePlace);
     let deduped = filterFamilyActivities(deduplicate(normalized).filter(isFamilyPlace));
 
-    // 4a. Recherches ciblées météo-aware
+    // 4a. Recherches ciblées — intent d'envie ou météo-aware
     // Règle : chercher large, filtrer ensuite par filterActivitiesByWeather.
-    function getTargetedSearches(sg, wi) {
+    function getTargetedSearches(sg, wi, intent) {
       const byGroup = {
         0: 'musée exposition grotte caverne souterrain',
         1: 'salle escalade climbing bloc trampoline aire de jeux',
         2: 'ferme pédagogique parc animalier cinéma bowling',
         3: 'forêt randonnée balade sentier famille ferme animaux poney',
       };
+
+      // Intent d'envie prioritaire sur la météo
+      if (intent === 'sport') {
+        return [
+          'piscine couverte trampoline park famille',
+          'salle escalade climbing bloc famille',
+          'bowling patinoire famille',
+          'laser game famille enfants',
+          'karting kart famille enfants',
+          'accrobranche tyrolienne zip-line famille',
+          'aire de jeux couverte intérieure famille',
+        ];
+      }
+      if (intent === 'calme') {
+        return [
+          'bibliothèque médiathèque jeunesse enfants',
+          'ludothèque jeux famille',
+          'musée calme exposition famille',
+          'café famille salon thé',
+          'librairie jeunesse enfants',
+          'planétarium astronomie famille',
+        ];
+      }
+      if (intent === 'nature') {
+        return [
+          'forêt balade sentier famille',
+          'lac plage baignade famille',
+          'ferme pédagogique animaux enfants famille',
+          'zoo parc animalier famille',
+          'belvédère point de vue montagne famille',
+          'parc jardin botanique famille',
+          'randonnée nature famille enfants',
+        ];
+      }
+      if (intent === 'culture') {
+        return [
+          'musée famille enfants',
+          'aquarium visite famille',
+          'château visite patrimoine famille',
+          'grotte caverne visite famille',
+          'exposition interactive famille',
+          'ferme pédagogique éducative famille',
+          'site historique patrimoine famille',
+        ];
+      }
       if (wi === 'rainy') {
         return [
           'ludothèque bibliothèque jeunesse enfants',
@@ -1032,7 +1079,7 @@ app.post('/generer-activites', async (req, res) => {
       }
       return byGroup[sg] ? [byGroup[sg]] : [];
     }
-    const targetedSearches = getTargetedSearches(searchGroup, weatherIntent);
+    const targetedSearches = getTargetedSearches(searchGroup, weatherIntent, activityIntent);
     for (const query of targetedSearches) {
       try {
         const targeted = await fetchTargetedSearch(

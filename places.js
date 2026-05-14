@@ -7,6 +7,14 @@ const SEARCH_GROUPS = [
   ['zoo', 'aquarium', 'park', 'tourist_attraction', 'museum', 'playground', 'amusement_park'],                           // groupe 3 — animaux + jeux
 ];
 
+// Activity-intent-specific place types — override SEARCH_GROUPS when activityIntent is set
+const INTENT_TYPES = {
+  sport:   ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'amusement_center', 'gym', 'sports_complex', 'amusement_park'],
+  calme:   ['library', 'museum', 'art_gallery', 'cafe', 'aquarium'],
+  nature:  ['park', 'zoo', 'aquarium', 'natural_feature', 'botanical_garden', 'campground', 'beach'],
+  culture: ['museum', 'aquarium', 'art_gallery', 'tourist_attraction', 'zoo', 'library'],
+};
+
 // Weather-intent-specific place types — override SEARCH_GROUPS when weatherIntent is set
 const WEATHER_TYPES = {
   rainy:    ['museum', 'library', 'bowling_alley', 'movie_theater', 'aquarium', 'amusement_center', 'shopping_mall', 'swimming_pool', 'ice_skating_rink', 'gym'],
@@ -35,10 +43,13 @@ const FIELD_MASK = [
   'places.businessStatus',
 ].join(',');
 
-async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0, weatherIntent = null) {
+async function fetchNearbyPlaces(lat, lon, radiusMeters, apiKey, searchGroup = 0, weatherIntent = null, activityIntent = null) {
   const safeRadius = Math.min(radiusMeters, 50000); // Google searchNearby hard limit
   let types;
-  if (weatherIntent === 'cold' && searchGroup >= 2) {
+  if (activityIntent && INTENT_TYPES[activityIntent]) {
+    types = INTENT_TYPES[activityIntent];
+    console.log(`[places] activityIntent=${activityIntent} types(${types.length})=${types.join(',')}`);
+  } else if (weatherIntent === 'cold' && searchGroup >= 2) {
     const sgTypes = SEARCH_GROUPS[searchGroup % SEARCH_GROUPS.length];
     types = [...new Set([...WEATHER_TYPES.cold, ...sgTypes])];
     console.log(`[places] cold_merged searchGroup=${searchGroup} types(${types.length})=${types.join(',')}`);
@@ -105,4 +116,4 @@ async function fetchTargetedSearch(lat, lon, radiusMeters, apiKey, textQuery, ma
   return data.places ?? [];
 }
 
-module.exports = { fetchNearbyPlaces, fetchTargetedSearch, WEATHER_TYPES, SEARCH_GROUPS };
+module.exports = { fetchNearbyPlaces, fetchTargetedSearch, WEATHER_TYPES, SEARCH_GROUPS, INTENT_TYPES };
