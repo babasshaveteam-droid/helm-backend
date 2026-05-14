@@ -7,12 +7,16 @@ const SEARCH_GROUPS = [
   ['zoo', 'aquarium', 'park', 'tourist_attraction', 'museum', 'playground', 'amusement_park'],                           // groupe 3 — animaux + jeux
 ];
 
-// Activity-intent-specific place types — override SEARCH_GROUPS when activityIntent is set
+// Activity-intent-specific place types — une envie principale par type, aucun overlap
 const INTENT_TYPES = {
-  sport:   ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'amusement_center', 'gym', 'sports_complex', 'amusement_park'],
-  calme:   ['library', 'museum', 'art_gallery', 'cafe', 'aquarium'],
-  nature:  ['park', 'zoo', 'aquarium', 'natural_feature', 'botanical_garden', 'campground', 'beach'],
-  culture: ['museum', 'aquarium', 'art_gallery', 'tourist_attraction', 'zoo', 'library'],
+  // Se défouler : activités dynamiques, sport, jeux actifs
+  sport:   ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'amusement_center', 'amusement_park', 'gym', 'sports_complex', 'playground'],
+  // Activité calme : doux, indoor, intellectuel
+  calme:   ['library', 'cafe', 'movie_theater'],
+  // En nature : extérieur, animaux, paysages (aquarium → culture)
+  nature:  ['park', 'zoo', 'natural_feature', 'botanical_garden', 'campground', 'beach'],
+  // Découvrir : visite, culture, apprentissage
+  culture: ['museum', 'aquarium', 'art_gallery', 'tourist_attraction'],
 };
 
 // Weather-intent-specific place types — override SEARCH_GROUPS when weatherIntent is set

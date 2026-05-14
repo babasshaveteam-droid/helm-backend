@@ -973,9 +973,9 @@ app.post('/generer-activites', async (req, res) => {
         return [
           'bibliothèque médiathèque jeunesse enfants',
           'ludothèque jeux famille',
-          'musée calme exposition famille',
           'café famille salon thé',
           'librairie jeunesse enfants',
+          'cinéma film enfants famille',
           'planétarium astronomie famille',
         ];
       }
@@ -983,7 +983,6 @@ app.post('/generer-activites', async (req, res) => {
         return [
           'forêt balade sentier famille',
           'lac plage baignade famille',
-          'ferme pédagogique animaux enfants famille',
           'zoo parc animalier famille',
           'belvédère point de vue montagne famille',
           'parc jardin botanique famille',
