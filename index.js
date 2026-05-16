@@ -6,7 +6,7 @@ const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
 const { applyFamilyRules, normalizeIndoorOutdoor } = require('./activityRules');
 const { resolveActivityEmoji, resolveAll } = require('./iconResolver');
-const { filterFamilyActivities } = require('./qualityFilter');
+const { filterFamilyActivities, computeMinutesUntilClose } = require('./qualityFilter');
 
 const app = express();
 app.use(cors());
@@ -36,12 +36,23 @@ if (!OPENROUTER_KEY) throw new Error('OPENROUTER_KEY manquante');
 const ACTIVITY_CACHE = new Map();
 const CACHE_TTL_MS = 20 * 60 * 1000;
 
+function getTimeBucketCH() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Zurich',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const get = type => parts.find(p => p.type === type)?.value ?? '00';
+  const bucket = Math.floor(parseInt(get('minute'), 10) / 10);
+  return `${get('year')}${get('month')}${get('day')}${get('hour')}${bucket}`;
+}
+
 function getCacheKey(lat, lon, weatherIntent, radiusMeters, searchGroup, exclude, activityIntent) {
   const latR = Math.round(lat * 100) / 100;
   const lonR = Math.round(lon * 100) / 100;
   const excKey = exclude.length === 0 ? '' : '|' + [...exclude].sort().join(',');
   const intentKey = activityIntent ? `|intent:${activityIntent}` : '';
-  return `${latR},${lonR}|${weatherIntent}|${radiusMeters}|${searchGroup}${intentKey}${excKey}`;
+  return `${latR},${lonR}|${weatherIntent}|${radiusMeters}|${searchGroup}${intentKey}|t${getTimeBucketCH()}${excKey}`;
 }
 
 function getCached(key) {
@@ -1170,6 +1181,19 @@ app.post('/generer-activites', async (req, res) => {
     // 4.5. Routes API — attach real driving times (non-blocking, 5s timeout)
     candidates = await fetchTravelTimes(latitude, longitude, candidates, GOOGLE_PLACES_API_KEY);
 
+    // Filtre closing_soon travel-aware : rejette si fermeture dans (closesIn - travelMin) < 45 min
+    candidates = candidates.filter(p => {
+      const minutesLeft = computeMinutesUntilClose(p.closingPeriods);
+      if (minutesLeft === null) return true;
+      const travelMin = p.routeDurationSeconds != null ? Math.ceil(p.routeDurationSeconds / 60) : 0;
+      const margin = minutesLeft - travelMin;
+      if (margin < 45) {
+        console.log(`[quality] rejected reason=closing_soon_travel minutesLeft=${minutesLeft} travelMin=${travelMin} margin=${margin} name="${p.name}"`);
+        return false;
+      }
+      return true;
+    });
+
     // Map for O(1) lookup during merge (built after Routes API enrichment)
     const placesMap = new Map(candidates.map(p => [p.sourceId, p]));
 
@@ -1288,7 +1312,7 @@ app.post('/generer-activites', async (req, res) => {
           latitude, longitude, 50000, GOOGLE_PLACES_API_KEY, rescueGroup, null
         );
         console.log(`[places] rescue: ${rescueRaw.length} lieux (radius=80km group=${rescueGroup})`);
-        const rescuePlaces = deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace);
+        const rescuePlaces = filterFamilyActivities(deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace));
         if (rescuePlaces.length > 0) {
           const rescueActivities = placesToFallback(rescuePlaces, latitude, longitude, weatherIntent);
           rescued = rescueActivities.map(normalizeActivityForDisplay).filter(Boolean).filter(validateNearbyActivity);

@@ -77,6 +77,45 @@ function isAgriculturalNonVisitable(place) {
   return true;
 }
 
+// ─── Closing-time helpers (Europe/Zurich) ─────────────────────────────────────
+
+function getZurichNow() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Zurich',
+    weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const dayStr = parts.find(p => p.type === 'weekday')?.value ?? 'Monday';
+  const hour   = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10);
+  const minute = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10);
+  const DAY = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+  return { day: DAY[dayStr] ?? 0, hour, minute };
+}
+
+// Returns minutes until the place closes, or null if not determinable.
+// Handles same-day, overnight, and lunch-break periods correctly.
+function computeMinutesUntilClose(closingPeriods) {
+  if (!Array.isArray(closingPeriods) || closingPeriods.length === 0) return null;
+  const { day, hour, minute } = getZurichNow();
+  const nowMin = hour * 60 + minute;
+  for (const period of closingPeriods) {
+    if (!period.open || !period.close) continue; // 24/7 ou mal formé
+    const openDay  = period.open.day;
+    const openMin  = (period.open.hour  ?? 0) * 60 + (period.open.minute  ?? 0);
+    const closeDay = period.close.day;
+    const closeMin = (period.close.hour ?? 0) * 60 + (period.close.minute ?? 0);
+    // Même journée (ex: 09h–18h)
+    if (openDay === day && closeDay === day && nowMin >= openMin && nowMin < closeMin)
+      return closeMin - nowMin;
+    // Ouvre aujourd'hui, ferme demain (nuit : ex: 22h–02h)
+    if (openDay === day && closeDay === (day + 1) % 7 && nowMin >= openMin)
+      return (24 * 60 - nowMin) + closeMin;
+    // Ouvert depuis hier, ferme aujourd'hui (continuation de nuit)
+    if (openDay === (day + 6) % 7 && closeDay === day && nowMin < closeMin)
+      return closeMin - nowMin;
+  }
+  return null;
+}
+
 function getFamilyActivityScore(place) {
   const name = place.name ?? '';
   const types = Array.isArray(place.types) ? place.types : [];
@@ -84,6 +123,7 @@ function getFamilyActivityScore(place) {
 
   // Rejets immédiats — score non pertinent
   if (businessStatus === 'CLOSED_PERMANENTLY') return -999;
+  if (businessStatus === 'CLOSED_TEMPORARILY') return -999;
   if (isOpen === false) return -999; // fermé maintenant → §30
   if (isForbiddenService(place)) return -999; // catégorie interdite → §31
   if (isPoolShop(place)) return -5;
@@ -127,6 +167,7 @@ const MIN_SCORE = 3;
 
 function getRejectReason(place, score) {
   if (place.businessStatus === 'CLOSED_PERMANENTLY') return 'closed_permanently';
+  if (place.businessStatus === 'CLOSED_TEMPORARILY') return 'closed_temporarily';
   if (place.isOpen === false) return 'closed_now';
   if (isForbiddenService(place)) return 'forbidden_category';
   if (isPoolShop(place)) return 'pool_shop';
@@ -149,6 +190,11 @@ function filterFamilyActivities(places) {
       if (p.isOpen === null) {
         console.log(`[quality] warning reason=unknown_opening_hours name="${p.name}"`);
       }
+      const minutesLeft = computeMinutesUntilClose(p.closingPeriods);
+      if (minutesLeft !== null && minutesLeft <= 30) {
+        console.log(`[quality] rejected reason=closing_soon minutesLeft=${minutesLeft} name="${p.name}"`);
+        continue;
+      }
       accepted.push(p);
     }
   }
@@ -161,5 +207,6 @@ module.exports = {
   isPoolShop,
   isAgriculturalNonVisitable,
   getRejectReason,
+  computeMinutesUntilClose,
   MIN_SCORE,
 };

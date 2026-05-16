@@ -44,6 +44,9 @@ const FIELD_MASK = [
   'places.rating',
   'places.userRatingCount',
   'places.currentOpeningHours.openNow',
+  'places.currentOpeningHours.periods',
+  'places.regularOpeningHours.openNow',
+  'places.regularOpeningHours.periods',
   'places.businessStatus',
 ].join(',');
 

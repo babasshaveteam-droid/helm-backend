@@ -24,8 +24,13 @@ function normalizePlace(googlePlace) {
     types: googlePlace.types ?? [],
     rating: googlePlace.rating ?? null,
     ratingCount: googlePlace.userRatingCount ?? null,
-    isOpen: googlePlace.currentOpeningHours?.openNow ?? null,
+    isOpen: googlePlace.currentOpeningHours?.openNow
+         ?? googlePlace.regularOpeningHours?.openNow
+         ?? null,
     businessStatus: googlePlace.businessStatus ?? null,
+    closingPeriods: googlePlace.currentOpeningHours?.periods
+                 ?? googlePlace.regularOpeningHours?.periods
+                 ?? null,
     normalizedKey: normalizeKey(name + '|' + address),
   };
 }
