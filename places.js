@@ -14,7 +14,7 @@ const INTENT_TYPES = {
   // Activité calme : doux, gourmand, indoor
   calme:   ['ice_cream_shop', 'movie_theater'],
   // En nature : extérieur, animaux, paysages (aquarium → culture)
-  nature:  ['park', 'zoo', 'natural_feature', 'botanical_garden', 'campground', 'beach'],
+  nature:  ['park', 'zoo', 'botanical_garden', 'campground', 'beach'],
   // Découvrir : visite, culture, apprentissage
   culture: ['museum', 'aquarium', 'art_gallery', 'tourist_attraction'],
 };
