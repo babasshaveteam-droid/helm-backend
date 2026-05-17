@@ -1,9 +1,9 @@
 // Règles officielles : docs/HELM_CORE_RULES.md
 // Rotate through different type groups on each refresh to surface varied places
 const SEARCH_GROUPS = [
-  ['park', 'museum', 'library', 'tourist_attraction', 'movie_theater', 'bowling_alley', 'playground', 'amusement_park'], // groupe 0
+  ['park', 'museum', 'tourist_attraction', 'movie_theater', 'bowling_alley', 'playground', 'amusement_park'], // groupe 0
   ['park', 'art_gallery', 'museum', 'tourist_attraction', 'amusement_center', 'movie_theater', 'amusement_park'],        // groupe 1
-  ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'museum', 'library', 'campground'],                             // groupe 2
+  ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'museum', 'campground'],                                         // groupe 2
   ['zoo', 'aquarium', 'park', 'tourist_attraction', 'museum', 'playground', 'amusement_park'],                           // groupe 3 — animaux + jeux
 ];
 
@@ -11,8 +11,8 @@ const SEARCH_GROUPS = [
 const INTENT_TYPES = {
   // Se défouler : activités dynamiques, sport, jeux actifs
   sport:   ['swimming_pool', 'ice_skating_rink', 'bowling_alley', 'amusement_center', 'amusement_park', 'gym', 'sports_complex', 'playground'],
-  // Activité calme : doux, indoor, intellectuel
-  calme:   ['library', 'cafe', 'movie_theater'],
+  // Activité calme : doux, gourmand, indoor
+  calme:   ['ice_cream_shop', 'movie_theater'],
   // En nature : extérieur, animaux, paysages (aquarium → culture)
   nature:  ['park', 'zoo', 'natural_feature', 'botanical_garden', 'campground', 'beach'],
   // Découvrir : visite, culture, apprentissage

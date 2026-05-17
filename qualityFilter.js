@@ -37,7 +37,7 @@ const NIGHT_MANAGED_TYPES = new Set([
   'library', 'museum', 'cafe', 'restaurant', 'movie_theater', 'bowling_alley',
   'ice_skating_rink', 'swimming_pool', 'aquarium', 'zoo', 'tourist_attraction',
   'art_gallery', 'amusement_park', 'amusement_center', 'gym', 'sports_complex',
-  'castle', 'historic_site',
+  'castle', 'historic_site', 'ice_cream_shop',
 ]);
 
 // Lieux nature/outdoor librement accessibles — exempts de la règle nuit
@@ -54,6 +54,13 @@ const LOTTERY_KIOSK_RE = /\b(jeux?\s+(de\s+la\s+)?loterie|loterie\s+romande|lote
 
 // Ferme qui EST une activité famille
 const FARM_ACTIVITY_RE = /ferme\s+(p[eé]dagog|animaux?|aventure|ouverte|famille|enfants?)|parc\s+animalier|autocueillette|cueillette\s+famille/i;
+
+// Lieux adultes / chicha / nightclub — toujours rejetés
+const ADULT_EXCLUSION_RE = /\b(chicha|shisha|hookah|narghil[eé]|nargil[eé]|nightclub|night[\s-]?club|bo[îi]te\s+de\s+nuit|cabaret|strip[\s-]?club|peep[\s-]?show|sex[\s-]?shop)\b/i;
+
+// Lieux gourmands familiaux — qualité renforcée (ratingCount ≥ 30)
+const GOURMAND_TYPE_RE = /\bcr[eê]p(erie|es?)\b|p[aâ]tisserie|chocolaterie|\bconfiserie\b|glacier\s+(artisanal|de\s+)|salon\s+de\s+glaces?/i;
+const GOURMAND_TAKEAWAY_RE = /\b(kiosque|stand|comptoir|distributeur|take[\s-]?away|emporter|snack)\b/i;
 
 // Entités business / sociétés / services techniques
 const BUSINESS_ENTITY_RE = /\b(sarl|sas|sa\b|gmbh|s\.r\.l\.|soci[eé]t[eé]|construction|r[eé]novation|travaux|maçonnerie|couverture|menuiserie|charpente|isolation|vitrage|carrelage|peinture\s+(int|ext)|[eé]lectricit[eé]\s+s[a-z]{2,4}\b|plomberie\s+s[a-z]{2,4}\b|chauffage\s+s[a-z]{2,4}\b|ventilation\s+s[a-z]{2,4}\b|signalisation|transport\s+(sarl|sas|sa))\b/i;
@@ -163,6 +170,7 @@ function getFamilyActivityScore(place) {
   if (isAgriculturalNonVisitable(place)) return -5;
   if (BUSINESS_ENTITY_RE.test(name)) return -4;
   if (LOTTERY_KIOSK_RE.test(name)) return -5;
+  if (ADULT_EXCLUSION_RE.test(name)) return -5;
 
   let score = 0;
 
@@ -193,6 +201,12 @@ function getFamilyActivityScore(place) {
   const meaningful = types.filter(t => !['point_of_interest', 'establishment'].includes(t));
   if (meaningful.length === 0 && types.length > 0) score -= 3;
 
+  // Qualité renforcée pour lieux gourmands — ratingCount ≥ 30 requis, kiosque/take-away interdit
+  if (GOURMAND_TYPE_RE.test(name)) {
+    if (GOURMAND_TAKEAWAY_RE.test(name)) score -= 4;
+    else if (ratingCount === null || ratingCount < 30) score -= 2;
+  }
+
   return score;
 }
 
@@ -207,6 +221,7 @@ function getRejectReason(place, score) {
   if (isAgriculturalNonVisitable(place)) return 'agricultural_building';
   if (BUSINESS_ENTITY_RE.test(place.name ?? '')) return 'business_entity';
   if (LOTTERY_KIOSK_RE.test(place.name ?? '')) return 'lottery';
+  if (ADULT_EXCLUSION_RE.test(place.name ?? '')) return 'adult_venue';
   if (score < MIN_SCORE) return 'low_family_activity_score';
   return null;
 }

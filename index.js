@@ -982,9 +982,10 @@ app.post('/generer-activites', async (req, res) => {
       }
       if (intent === 'calme') {
         return [
-          'bibliothèque médiathèque jeunesse enfants',
-          'ludothèque jeux famille',
-          'café famille salon thé',
+          'glacier salon de glaces famille enfants',
+          'crêperie galette famille enfants',
+          'pâtisserie salon thé famille enfants',
+          'chocolaterie confiserie dégustation famille',
           'librairie jeunesse enfants',
           'cinéma film enfants famille',
           'planétarium astronomie famille',
