@@ -1124,8 +1124,7 @@ app.post('/generer-activites', async (req, res) => {
         const rawPlaces2 = await fetchNearbyPlaces(
           latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4, null
         );
-        let fresh2 = deduplicate(rawPlaces2.map(normalizePlace))
-          .filter(isFamilyPlace)
+        let fresh2 = filterFamilyActivities(deduplicate(rawPlaces2.map(normalizePlace)).filter(isFamilyPlace))
           .filter(p => !excludeSet.has(p.sourceId));
         if (widerRadius > 40000 && fresh2.length >= 3) {
           const hv2 = fresh2.filter(p => p.types.some(t => HIGH_VALUE_LONG_DISTANCE.has(t)));

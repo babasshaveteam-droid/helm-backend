@@ -32,6 +32,20 @@ const OUTDOOR_PUBLIC_TYPES = new Set([
   'park', 'natural_feature', 'beach', 'campground',
 ]);
 
+// Types qui doivent normalement avoir des horaires — règle prudente la nuit (21h-07h)
+const NIGHT_MANAGED_TYPES = new Set([
+  'library', 'museum', 'cafe', 'restaurant', 'movie_theater', 'bowling_alley',
+  'ice_skating_rink', 'swimming_pool', 'aquarium', 'zoo', 'tourist_attraction',
+  'art_gallery', 'amusement_park', 'amusement_center', 'gym', 'sports_complex',
+  'castle', 'historic_site',
+]);
+
+// Lieux nature/outdoor librement accessibles — exempts de la règle nuit
+const OUTDOOR_NATURE_NAME_RE = /belv[eé]d[eè]re|panorama|vue\s+sur|\bsentier\b|for[eê]t|\blac\b|alpage|gorge|cascade|chute|canyon|\bcol\b|glacier|\bsommet\b|(see|berg|alp|horn|pass|gletscher|schlucht)\b/i;
+
+// Lieux gérés détectés par nom — soumis à la règle nuit même sans type Google explicite
+const NIGHT_MANAGED_NAME_RE = /\bobservatoir[e]?\b|\bobservatory\b|ch[aâ]teau|castle|fortress|forteresse/i;
+
 // Bâtiments agricoles non visitables
 const AGRICULTURAL_NON_VISITABLE_RE = /\b(s[eé]choir|grange|hangar|entrepôt\s+agri|d[eé]p[oô]t\s+agri|bâtiment\s+agri)\b/i;
 
@@ -116,6 +130,25 @@ function computeMinutesUntilClose(closingPeriods) {
   return null;
 }
 
+// Returns true if Zurich time is between 21h00 and 06h59
+function isNightHoursZurich() {
+  const { hour } = getZurichNow();
+  return hour >= 21 || hour < 7;
+}
+
+// Returns true if the place is expected to have known opening hours
+// Outdoor public spaces (park, natural_feature, beach, campground) and
+// nature-named places (sentier, lac, belvédère…) are always exempt.
+function isManagedHoursPlace(place) {
+  const types = Array.isArray(place.types) ? place.types : [];
+  const name = place.name ?? '';
+  if (types.some(t => OUTDOOR_PUBLIC_TYPES.has(t))) return false;
+  if (OUTDOOR_NATURE_NAME_RE.test(name)) return false;
+  if (types.some(t => NIGHT_MANAGED_TYPES.has(t))) return true;
+  if (NIGHT_MANAGED_NAME_RE.test(name)) return true;
+  return false;
+}
+
 function getFamilyActivityScore(place) {
   const name = place.name ?? '';
   const types = Array.isArray(place.types) ? place.types : [];
@@ -185,18 +218,24 @@ function filterFamilyActivities(places) {
     const reason = getRejectReason(p, score);
     if (reason) {
       console.log(`[quality] rejected reason=${reason} score=${score} name="${p.name}"`);
-    } else {
-      console.log(`[quality] accepted score=${score} name="${p.name}"`);
-      if (p.isOpen === null) {
-        console.log(`[quality] warning reason=unknown_opening_hours name="${p.name}"`);
-      }
-      const minutesLeft = computeMinutesUntilClose(p.closingPeriods);
-      if (minutesLeft !== null && minutesLeft <= 30) {
-        console.log(`[quality] rejected reason=closing_soon minutesLeft=${minutesLeft} name="${p.name}"`);
-        continue;
-      }
-      accepted.push(p);
+      continue;
     }
+    // Ferme bientôt (≤30 min)
+    const minutesLeft = computeMinutesUntilClose(p.closingPeriods);
+    if (minutesLeft !== null && minutesLeft <= 30) {
+      console.log(`[quality] rejected reason=closing_soon minutesLeft=${minutesLeft} name="${p.name}"`);
+      continue;
+    }
+    // Règle prudente nuit (21h-07h) : isOpen=null sur lieu normalement géré → rejeté
+    if (p.isOpen === null && isNightHoursZurich() && isManagedHoursPlace(p)) {
+      console.log(`[quality] rejected reason=unknown_hours_night name="${p.name}"`);
+      continue;
+    }
+    console.log(`[quality] accepted score=${score} name="${p.name}"`);
+    if (p.isOpen === null) {
+      console.log(`[quality] warning reason=unknown_opening_hours name="${p.name}"`);
+    }
+    accepted.push(p);
   }
   return accepted;
 }
