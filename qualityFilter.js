@@ -58,6 +58,10 @@ const FARM_ACTIVITY_RE = /ferme\s+(p[eé]dagog|animaux?|aventure|ouverte|famille
 // Lieux adultes / chicha / nightclub — toujours rejetés
 const ADULT_EXCLUSION_RE = /\b(chicha|shisha|hookah|narghil[eé]|nargil[eé]|nightclub|night[\s-]?club|bo[îi]te\s+de\s+nuit|cabaret|strip[\s-]?club|peep[\s-]?show|sex[\s-]?shop)\b/i;
 
+// Stands de tir / armes — jamais adaptés à une famille
+const SHOOTING_VENUE_RE = /\b(stand[s]?\s+de\s+tir|soci[eé]t[eé]\s+de\s+tir|club\s+de\s+tir|tir\s+sportif|shooting[\s-]?range|rifle[\s-]?range|gun[\s-]?range|gun[\s-]?club|firearms?|armes?\s+[aà]\s+feu|munitions?|armurerie)\b/i;
+const SHOOTING_VENUE_TYPES = new Set(['shooting_range', 'gun_range', 'rifle_range', 'gun_club']);
+
 // Lieux gourmands familiaux — qualité renforcée (ratingCount ≥ 30)
 const GOURMAND_TYPE_RE = /\bcr[eê]p(erie|es?)\b|p[aâ]tisserie|chocolaterie|\bconfiserie\b|glacier\s+(artisanal|de\s+)|salon\s+de\s+glaces?/i;
 const GOURMAND_TAKEAWAY_RE = /\b(kiosque|stand|comptoir|distributeur|take[\s-]?away|emporter|snack)\b/i;
@@ -89,6 +93,13 @@ function isPoolShop(place) {
   if (/\bpiscines\b/i.test(name) && !PUBLIC_POOL_RE.test(name) &&
       (types.includes('store') || types.includes('general_contractor'))) return true;
   return false;
+}
+
+function isShootingVenue(place) {
+  const name = place.name ?? '';
+  if (SHOOTING_VENUE_RE.test(name)) return true;
+  const types = Array.isArray(place.types) ? place.types : [];
+  return types.some(t => SHOOTING_VENUE_TYPES.has(t));
 }
 
 function isAgriculturalNonVisitable(place) {
@@ -171,6 +182,7 @@ function getFamilyActivityScore(place) {
   if (BUSINESS_ENTITY_RE.test(name)) return -4;
   if (LOTTERY_KIOSK_RE.test(name)) return -5;
   if (ADULT_EXCLUSION_RE.test(name)) return -5;
+  if (isShootingVenue(place)) return -5;
 
   let score = 0;
 
@@ -222,6 +234,7 @@ function getRejectReason(place, score) {
   if (BUSINESS_ENTITY_RE.test(place.name ?? '')) return 'business_entity';
   if (LOTTERY_KIOSK_RE.test(place.name ?? '')) return 'lottery';
   if (ADULT_EXCLUSION_RE.test(place.name ?? '')) return 'adult_venue';
+  if (isShootingVenue(place)) return 'shooting_venue';
   if (score < MIN_SCORE) return 'low_family_activity_score';
   return null;
 }
@@ -260,6 +273,7 @@ module.exports = {
   filterFamilyActivities,
   isPoolShop,
   isAgriculturalNonVisitable,
+  isShootingVenue,
   getRejectReason,
   computeMinutesUntilClose,
   MIN_SCORE,
