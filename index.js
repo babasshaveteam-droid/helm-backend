@@ -6,7 +6,7 @@ const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
 const { applyFamilyRules, normalizeIndoorOutdoor } = require('./activityRules');
 const { resolveActivityEmoji, resolveAll } = require('./iconResolver');
-const { filterFamilyActivities, computeMinutesUntilClose } = require('./qualityFilter');
+const { filterFamilyActivities, computeMinutesUntilClose, isCalmIncompatible } = require('./qualityFilter');
 
 const app = express();
 app.use(cors());
@@ -999,6 +999,15 @@ app.post('/generer-activites', async (req, res) => {
           'belvédère point de vue montagne famille',
           'parc jardin botanique famille',
           'randonnée nature famille enfants',
+          'balade nature promenade famille enfants',
+          'sentier facile promenade poussette',
+          'bord de lac rivière famille',
+          'gorge cascade waterfall famille',
+          'ferme pédagogique animaux découverte famille',
+          'Wanderweg Familienweg Wald Kinder',
+          'See Fluss Natur Familie Kinder',
+          'Aussichtspunkt Panorama Belvédère Familie',
+          'Naturpark Wildpark Tierpark Familie',
         ];
       }
       if (intent === 'culture') {
@@ -1148,6 +1157,17 @@ app.post('/generer-activites', async (req, res) => {
           console.log(`[refresh] Exclude relâché: ${fresh.length} candidats (dont déjà vus)`);
         }
       }
+    }
+
+    // Filtre calme — exclure refuges/abris/cabanes incompatibles avec une activité calme
+    if (activityIntent === 'calme') {
+      fresh = fresh.filter(p => {
+        if (isCalmIncompatible(p)) {
+          console.log(`[quality] rejected reason=calm_refuge_like name="${p.name}"`);
+          return false;
+        }
+        return true;
+      });
     }
 
     // Trier par distance croissante — activités les plus proches en premier
@@ -1312,7 +1332,16 @@ app.post('/generer-activites', async (req, res) => {
           latitude, longitude, 50000, GOOGLE_PLACES_API_KEY, rescueGroup, null
         );
         console.log(`[places] rescue: ${rescueRaw.length} lieux (radius=80km group=${rescueGroup})`);
-        const rescuePlaces = filterFamilyActivities(deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace));
+        let rescuePlaces = filterFamilyActivities(deduplicate(rescueRaw.map(normalizePlace)).filter(isFamilyPlace));
+        if (activityIntent === 'calme') {
+          rescuePlaces = rescuePlaces.filter(p => {
+            if (isCalmIncompatible(p)) {
+              console.log(`[quality] rejected reason=calm_refuge_like name="${p.name}"`);
+              return false;
+            }
+            return true;
+          });
+        }
         if (rescuePlaces.length > 0) {
           const rescueActivities = placesToFallback(rescuePlaces, latitude, longitude, weatherIntent);
           rescued = rescueActivities.map(normalizeActivityForDisplay).filter(Boolean).filter(validateNearbyActivity);

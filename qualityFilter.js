@@ -30,6 +30,7 @@ const PUBLIC_POOL_RE = /piscine\s+(municipale|communale|publique|couverte|ext[e�
 // Espaces naturels publics — pas d'horaires Google → exempt de la pénalité isOpen=null
 const OUTDOOR_PUBLIC_TYPES = new Set([
   'park', 'natural_feature', 'beach', 'campground',
+  'botanical_garden', 'zoo',
 ]);
 
 // Types qui doivent normalement avoir des horaires — règle prudente la nuit (21h-07h)
@@ -61,6 +62,10 @@ const ADULT_EXCLUSION_RE = /\b(chicha|shisha|hookah|narghil[eé]|nargil[eé]|nig
 // Stands de tir / armes — jamais adaptés à une famille
 const SHOOTING_VENUE_RE = /\b(stand[s]?\s+de\s+tir|soci[eé]t[eé]\s+de\s+tir|club\s+de\s+tir|tir\s+sportif|shooting[\s-]?range|rifle[\s-]?range|gun[\s-]?range|gun[\s-]?club|firearms?|armes?\s+[aà]\s+feu|munitions?|armurerie)\b/i;
 const SHOOTING_VENUE_TYPES = new Set(['shooting_range', 'gun_range', 'rifle_range', 'gun_club']);
+
+// Lieux incompatibles avec "Activité calme" — ne s'applique QUE pour activityIntent=calme
+// Note : chalet isolé séparé car "é" non-ASCII invalide \b en fin de groupe
+const CALM_REFUGE_RE = /\b(refuge|cabane|abri|shelter|hut|bivouac|cabanon)\b|chalet\s+isol[eé]/i;
 
 // Lieux gourmands familiaux — qualité renforcée (ratingCount ≥ 30)
 const GOURMAND_TYPE_RE = /\bcr[eê]p(erie|es?)\b|p[aâ]tisserie|chocolaterie|\bconfiserie\b|glacier\s+(artisanal|de\s+)|salon\s+de\s+glaces?/i;
@@ -100,6 +105,10 @@ function isShootingVenue(place) {
   if (SHOOTING_VENUE_RE.test(name)) return true;
   const types = Array.isArray(place.types) ? place.types : [];
   return types.some(t => SHOOTING_VENUE_TYPES.has(t));
+}
+
+function isCalmIncompatible(place) {
+  return CALM_REFUGE_RE.test(place.name ?? '');
 }
 
 function isAgriculturalNonVisitable(place) {
@@ -274,6 +283,7 @@ module.exports = {
   isPoolShop,
   isAgriculturalNonVisitable,
   isShootingVenue,
+  isCalmIncompatible,
   getRejectReason,
   computeMinutesUntilClose,
   MIN_SCORE,
