@@ -675,6 +675,7 @@ const NATURE_MOUNTAIN_QUERIES = [
   'alpage belvédère lac montagne famille',
   'sentier montagne facile famille enfants',
   'Seilbahn Bergbahn Sessellift Familie Kinder',
+  'train montagne crémaillère cogwheel zahnradbahn panorama famille',
 ];
 
 function sendActivities(res, activities) {
