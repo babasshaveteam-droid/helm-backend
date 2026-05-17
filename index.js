@@ -6,7 +6,7 @@ const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
 const { applyFamilyRules, normalizeIndoorOutdoor } = require('./activityRules');
 const { resolveActivityEmoji, resolveAll } = require('./iconResolver');
-const { filterFamilyActivities, computeMinutesUntilClose, isCalmIncompatible, getFamilyActivityScore, getNatureMinScore, isNatureDangerousMount, hasMountainSignal } = require('./qualityFilter');
+const { filterFamilyActivities, computeMinutesUntilClose, isCalmIncompatible, isGenericSportsHall, getFamilyActivityScore, getNatureMinScore, isNatureDangerousMount, hasMountainSignal } = require('./qualityFilter');
 
 const app = express();
 app.use(cors());
@@ -1203,11 +1203,16 @@ app.post('/generer-activites', async (req, res) => {
     }
 
     // Filtres Nature — montagne dangereuse + distance×qualité + signal montagne si >25 km
+    const SPORT_FIELD_NATURE_RE = /\b(basketball|basket|football|soccer|tennis|volleyball|badminton|terrain\s+de\s+(sport|basket|foot|tennis|volley)|sports?\s+(field|court|ground)|stade\b|stadium\b|skatepark|pumptrack|piste\s+de\s+skateboard)\b/i;
     if (activityIntent === 'nature') {
       const before = deduped.length;
       deduped = deduped.filter(p => {
         if (/\b(parking|car\s+park|stationnement)\b/i.test(p.name ?? '')) {
           console.log(`[nature] rejected reason=parking_name name="${p.name}"`);
+          return false;
+        }
+        if (SPORT_FIELD_NATURE_RE.test(p.name ?? '')) {
+          console.log(`[nature] rejected reason=sport_field_in_nature name="${p.name}"`);
           return false;
         }
         if (isNatureDangerousMount(p)) {
@@ -1280,6 +1285,17 @@ app.post('/generer-activites', async (req, res) => {
       fresh = fresh.filter(p => {
         if (isCalmIncompatible(p)) {
           console.log(`[quality] rejected reason=calm_refuge_like name="${p.name}"`);
+          return false;
+        }
+        return true;
+      });
+    }
+
+    // Filtre sport — exclure salles de sport adultes génériques sans signal activité famille
+    if (activityIntent === 'sport') {
+      fresh = fresh.filter(p => {
+        if (isGenericSportsHall(p)) {
+          console.log(`[sport] rejected reason=generic_sports_hall name="${p.name}"`);
           return false;
         }
         return true;
@@ -1453,6 +1469,15 @@ app.post('/generer-activites', async (req, res) => {
           rescuePlaces = rescuePlaces.filter(p => {
             if (isCalmIncompatible(p)) {
               console.log(`[quality] rejected reason=calm_refuge_like name="${p.name}"`);
+              return false;
+            }
+            return true;
+          });
+        }
+        if (activityIntent === 'sport') {
+          rescuePlaces = rescuePlaces.filter(p => {
+            if (isGenericSportsHall(p)) {
+              console.log(`[sport] rejected reason=generic_sports_hall name="${p.name}"`);
               return false;
             }
             return true;

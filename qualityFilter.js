@@ -119,6 +119,19 @@ function isCalmIncompatible(place) {
   return CALM_REFUGE_RE.test(place.name ?? '');
 }
 
+// Salles de sport adultes génériques (sports_complex / gym sans signal activité famille)
+const SPORTS_HALL_TYPES = new Set(['sports_complex', 'gym']);
+const SPORTS_HALL_NAME_RE = /\b(sports?\s+hall|salle\s+de\s+(sport|gym|fitness|musculation)|sporthalle|palestra|centre\s+(sportif|omnisports|multisports)|complexe\s+sportif|gymnase\b)\b/i;
+const SPORTS_HALL_RESCUE_RE = /\b(piscine|natation|swimming|patinoire|ice\s+rink|bowling|trampoline|escalade|climbing|karting|laser\s*tag|laser\s*game|paintball|accrobranche|aqua|padel|squash)\b/i;
+
+function isGenericSportsHall(place) {
+  const types = place.types ?? [];
+  const name = place.displayName?.text ?? place.name ?? '';
+  if (!types.some(t => SPORTS_HALL_TYPES.has(t))) return false;
+  if (!SPORTS_HALL_NAME_RE.test(name)) return false;
+  return !SPORTS_HALL_RESCUE_RE.test(name);
+}
+
 function isAgriculturalNonVisitable(place) {
   const name = place.name ?? '';
   if (!AGRICULTURAL_NON_VISITABLE_RE.test(name)) return false;
@@ -307,6 +320,7 @@ module.exports = {
   isAgriculturalNonVisitable,
   isShootingVenue,
   isCalmIncompatible,
+  isGenericSportsHall,
   isNatureDangerousMount,
   hasMountainSignal,
   getRejectReason,
