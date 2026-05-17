@@ -21,16 +21,16 @@ const INTENT_TYPES = {
 
 // Weather-intent-specific place types — override SEARCH_GROUPS when weatherIntent is set
 const WEATHER_TYPES = {
-  rainy:    ['museum', 'library', 'bowling_alley', 'movie_theater', 'aquarium', 'amusement_center', 'shopping_mall', 'swimming_pool', 'ice_skating_rink', 'gym'],
+  rainy:    ['museum', 'bowling_alley', 'movie_theater', 'aquarium', 'amusement_center', 'shopping_mall', 'swimming_pool', 'ice_skating_rink', 'gym'],
   cold: [
     // indoor / au chaud — priorité
-    'museum', 'library', 'movie_theater', 'bowling_alley', 'aquarium',
-    'cafe', 'swimming_pool', 'ice_skating_rink', 'gym',
+    'museum', 'movie_theater', 'bowling_alley', 'aquarium',
+    'swimming_pool', 'ice_skating_rink', 'gym',
     // outdoor court/familial autorisé par froid raisonnable
     'park', 'tourist_attraction', 'zoo',
   ],
   hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool', 'natural_feature', 'botanical_garden', 'beach', 'playground'],
-  unstable: ['museum', 'library', 'cafe', 'bowling_alley', 'shopping_mall', 'park', 'swimming_pool', 'ice_skating_rink', 'gym', 'playground'],
+  unstable: ['museum', 'bowling_alley', 'shopping_mall', 'park', 'swimming_pool', 'ice_skating_rink', 'gym', 'playground'],
   sunny:    ['park', 'zoo', 'aquarium', 'tourist_attraction', 'botanical_garden', 'amusement_park', 'natural_feature', 'beach', 'playground', 'campground'],
 };
 
