@@ -29,9 +29,9 @@ const WEATHER_TYPES = {
     // outdoor court/familial autorisé par froid raisonnable
     'park', 'tourist_attraction', 'zoo',
   ],
-  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool', 'natural_feature', 'botanical_garden', 'beach', 'playground'],
+  hot:      ['aquarium', 'museum', 'shopping_mall', 'park', 'zoo', 'swimming_pool', 'botanical_garden', 'beach', 'playground'],
   unstable: ['museum', 'bowling_alley', 'shopping_mall', 'park', 'swimming_pool', 'ice_skating_rink', 'gym', 'playground'],
-  sunny:    ['park', 'zoo', 'aquarium', 'tourist_attraction', 'botanical_garden', 'amusement_park', 'natural_feature', 'beach', 'playground', 'campground'],
+  sunny:    ['park', 'zoo', 'aquarium', 'tourist_attraction', 'botanical_garden', 'amusement_park', 'beach', 'playground', 'campground'],
 };
 
 // Only request the fields we actually use — minimises cost and payload

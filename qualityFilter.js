@@ -67,6 +67,14 @@ const SHOOTING_VENUE_TYPES = new Set(['shooting_range', 'gun_range', 'rifle_rang
 // Note : chalet isolé séparé car "é" non-ASCII invalide \b en fin de groupe
 const CALM_REFUGE_RE = /\b(refuge|cabane|abri|shelter|hut|bivouac|cabanon)\b|chalet\s+isol[eé]/i;
 
+// Activités montagne dangereuses / trop techniques — rejetées dans le flux Nature uniquement
+// Ne rejette PAS : "Glacier 3000", "Glacier des Diablerets", "arête" dans noms de restaurants
+const MOUNTAIN_DANGEROUS_RE = /\bvia[\s-]ferrata\b|alpinisme\b|haute[\s-]route\b|\bfreeride\b|ar[eê]te\s+(rocheuse|expos[eé]e?|alpine|technique|verticale)|glacier\s+(non\s+encadr[eé]|crevass[eé]|technique)\b/i;
+
+function isNatureDangerousMount(place) {
+  return MOUNTAIN_DANGEROUS_RE.test(place.name ?? '');
+}
+
 // Lieux gourmands familiaux — qualité renforcée (ratingCount ≥ 30)
 const GOURMAND_TYPE_RE = /\bcr[eê]p(erie|es?)\b|p[aâ]tisserie|chocolaterie|\bconfiserie\b|glacier\s+(artisanal|de\s+)|salon\s+de\s+glaces?/i;
 const GOURMAND_TAKEAWAY_RE = /\b(kiosque|stand|comptoir|distributeur|take[\s-]?away|emporter|snack)\b/i;
@@ -233,6 +241,21 @@ function getFamilyActivityScore(place) {
 
 const MIN_SCORE = 3;
 
+// Seuil de score minimum pour Nature selon la distance — plus loin = plus exigeant
+function getNatureMinScore(distanceKm) {
+  if (distanceKm <= 10) return MIN_SCORE; // 0–10 km : seuil normal (3)
+  if (distanceKm <= 25) return 4;         // 10–25 km : renforcé
+  if (distanceKm <= 40) return 5;         // 25–40 km : strict
+  return 6;                               // 40–60 km : très strict
+}
+
+// Signal montagne fort — requis pour les lieux nature au-delà de 25 km
+const MOUNTAIN_SIGNAL_RE = /t[eé]l[eé]cabine|t[eé]l[eé]ph[eé]rique|funiculaire|seilbahn|bergbahn|sessellift|alpage|\balp\b|\balm\b|bergsee|lac\s+de\s+montagne|aussichtspunkt|belv[eé]d[eè]re|belvedere|point\s+de\s+vue|familienwanderung|spielplatz\s+berg|naturpark|\bstation\s+(familiale|montagne)|\bglacier\b/i;
+
+function hasMountainSignal(place) {
+  return MOUNTAIN_SIGNAL_RE.test(place.name ?? '');
+}
+
 function getRejectReason(place, score) {
   if (place.businessStatus === 'CLOSED_PERMANENTLY') return 'closed_permanently';
   if (place.businessStatus === 'CLOSED_TEMPORARILY') return 'closed_temporarily';
@@ -284,7 +307,10 @@ module.exports = {
   isAgriculturalNonVisitable,
   isShootingVenue,
   isCalmIncompatible,
+  isNatureDangerousMount,
+  hasMountainSignal,
   getRejectReason,
   computeMinutesUntilClose,
   MIN_SCORE,
+  getNatureMinScore,
 };

@@ -6,7 +6,7 @@ const { normalizePlace, deduplicate, isFamilyPlace } = require('./normalize');
 const { MOCK_ACTIVITIES } = require('./mock');
 const { applyFamilyRules, normalizeIndoorOutdoor } = require('./activityRules');
 const { resolveActivityEmoji, resolveAll } = require('./iconResolver');
-const { filterFamilyActivities, computeMinutesUntilClose, isCalmIncompatible } = require('./qualityFilter');
+const { filterFamilyActivities, computeMinutesUntilClose, isCalmIncompatible, getFamilyActivityScore, getNatureMinScore, isNatureDangerousMount, hasMountainSignal } = require('./qualityFilter');
 
 const app = express();
 app.use(cors());
@@ -665,6 +665,18 @@ function expandRadius(r) {
   return Math.min(Math.round(r * 1.5), 50000);
 }
 
+const NATURE_RADII = [5000, 10000, 15000];
+
+// Extension montagne Nature — au-delà du rayon classique, pour les destinations fortes
+const NATURE_MOUNTAIN_RADII = [25000, 40000, 60000];
+const NATURE_MOUNTAIN_QUERIES = [
+  'téléphérique télécabine funiculaire famille panorama',
+  'station familiale montagne activités',
+  'alpage belvédère lac montagne famille',
+  'sentier montagne facile famille enfants',
+  'Seilbahn Bergbahn Sessellift Familie Kinder',
+];
+
 function sendActivities(res, activities) {
   if (res.headersSent) return;
   res.json(
@@ -927,36 +939,69 @@ app.post('/generer-activites', async (req, res) => {
   }, 32000);
 
   try {
-    // 3. Google Places Nearby Search
-    let rawPlaces;
-    try {
-      rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup, weatherIntent, activityIntent);
-      console.log(`[places] nearbyResults=${rawPlaces.length} (group=${searchGroup} radius=${radiusMeters}m)`);
-    } catch (placesErr) {
-      console.error('[backend] Google Places échoue:', placesErr.message, '→ réponse vide');
-      if (!res.headersSent) res.json([]); return;
-    }
+    const excludeSet = new Set(Array.isArray(exclude) ? exclude : []);
+    let deduped;
+    let searchRadius = radiusMeters;
 
-    if (!rawPlaces.length) {
-      console.warn(`[places] nearbyResults=0 (group=${searchGroup} radius=${radiusMeters}m) → retry altGroup + rayon élargi`);
-      try {
-        const altGroup = (searchGroup + 2) % 4;
-        const widerR = expandRadius(radiusMeters);
-        rawPlaces = await fetchNearbyPlaces(latitude, longitude, widerR, GOOGLE_PLACES_API_KEY, altGroup, null);
-        console.log(`[distance] radius_attempt=${widerR} auto_expand=true → ${rawPlaces.length} lieux`);
-      } catch (retryErr) {
-        console.warn('[places] retry échoue:', retryErr.message);
+    if (activityIntent === 'nature') {
+      // ── Nature : élargissement automatique progressif 5 km → 10 km → 15 km ──────
+      let bestPool = [];
+      let bestRadius = NATURE_RADII[0];
+      for (const nr of NATURE_RADII) {
+        try {
+          const np = await fetchNearbyPlaces(latitude, longitude, nr, GOOGLE_PLACES_API_KEY, searchGroup, weatherIntent, 'nature');
+          const norm = filterFamilyActivities(deduplicate(np.map(normalizePlace)).filter(isFamilyPlace));
+          const qualifyingCount = norm.filter(p => {
+            if (isNatureDangerousMount(p)) return false;
+            if (p.lat == null || p.lon == null) return true;
+            const dKm = haversineKm(latitude, longitude, p.lat, p.lon);
+            return getFamilyActivityScore(p) >= getNatureMinScore(dKm);
+          }).length;
+          console.log(`[nature] pass radius=${nr} results=${norm.length} qualifying=${qualifyingCount}`);
+          if (norm.length > bestPool.length) { bestPool = norm; bestRadius = nr; }
+          if (qualifyingCount >= 3) {
+            console.log(`[nature] selected radius=${nr} finalResults=${norm.length} (seuil 3 atteint)`);
+            break;
+          }
+        } catch (e) {
+          console.warn(`[nature] pass radius=${nr} échoue:`, e.message);
+        }
       }
-      if (!rawPlaces.length) {
-        console.warn('[empty] reason=google_0_results_even_after_retry');
+      console.log(`[nature] selected radius=${bestRadius} finalResults=${bestPool.length}`);
+      deduped = bestPool;
+      searchRadius = bestRadius;
+    } else {
+      // ── Autres intents : comportement existant ────────────────────────────────────
+      // 3. Google Places Nearby Search
+      let rawPlaces;
+      try {
+        rawPlaces = await fetchNearbyPlaces(latitude, longitude, radiusMeters, GOOGLE_PLACES_API_KEY, searchGroup, weatherIntent, activityIntent);
+        console.log(`[places] nearbyResults=${rawPlaces.length} (group=${searchGroup} radius=${radiusMeters}m)`);
+      } catch (placesErr) {
+        console.error('[backend] Google Places échoue:', placesErr.message, '→ réponse vide');
         if (!res.headersSent) res.json([]); return;
       }
-    }
 
-    // 4. Normalize → deduplicate → filter family-appropriate → exclude already-seen
-    const excludeSet = new Set(Array.isArray(exclude) ? exclude : []);
-    const normalized = rawPlaces.map(normalizePlace);
-    let deduped = filterFamilyActivities(deduplicate(normalized).filter(isFamilyPlace));
+      if (!rawPlaces.length) {
+        console.warn(`[places] nearbyResults=0 (group=${searchGroup} radius=${radiusMeters}m) → retry altGroup + rayon élargi`);
+        try {
+          const altGroup = (searchGroup + 2) % 4;
+          const widerR = expandRadius(radiusMeters);
+          rawPlaces = await fetchNearbyPlaces(latitude, longitude, widerR, GOOGLE_PLACES_API_KEY, altGroup, null);
+          console.log(`[distance] radius_attempt=${widerR} auto_expand=true → ${rawPlaces.length} lieux`);
+        } catch (retryErr) {
+          console.warn('[places] retry échoue:', retryErr.message);
+        }
+        if (!rawPlaces.length) {
+          console.warn('[empty] reason=google_0_results_even_after_retry');
+          if (!res.headersSent) res.json([]); return;
+        }
+      }
+
+      // 4. Normalize → deduplicate → filter family-appropriate
+      const normalized = rawPlaces.map(normalizePlace);
+      deduped = filterFamilyActivities(deduplicate(normalized).filter(isFamilyPlace));
+    }
 
     // 4a. Recherches ciblées — intent d'envie ou météo-aware
     // Règle : chercher large, filtrer ensuite par filterActivitiesByWeather.
@@ -993,21 +1038,31 @@ app.post('/generer-activites', async (req, res) => {
       }
       if (intent === 'nature') {
         return [
+          // ── Forêt / lac / faune / balade ────────────────────────────────────
           'forêt balade sentier famille',
           'lac plage baignade famille',
           'zoo parc animalier famille',
-          'belvédère point de vue montagne famille',
           'parc jardin botanique famille',
-          'randonnée nature famille enfants',
           'balade nature promenade famille enfants',
           'sentier facile promenade poussette',
           'bord de lac rivière famille',
           'gorge cascade waterfall famille',
           'ferme pédagogique animaux découverte famille',
+          // ── Montagne accessible famille ─────────────────────────────────────
+          'belvédère point de vue montagne famille',
+          'balade montagne famille accessible facile',
+          'alpage lac montagne famille animaux',
+          'téléphérique télécabine funiculaire famille panorama',
+          'station familiale montagne activités enfants',
+          'sentier montagne facile famille enfants poussette',
+          // ── Recherches allemand / suisse ────────────────────────────────────
           'Wanderweg Familienweg Wald Kinder',
           'See Fluss Natur Familie Kinder',
           'Aussichtspunkt Panorama Belvédère Familie',
           'Naturpark Wildpark Tierpark Familie',
+          'Familienwanderung leichte Wanderung Berg Kinder',
+          'Seilbahn Bergbahn Sessellift Familie Kinder',
+          'Bergsee Alm Alp Familie Ausflug',
         ];
       }
       if (intent === 'culture') {
@@ -1103,7 +1158,7 @@ app.post('/generer-activites', async (req, res) => {
     for (const query of targetedSearches) {
       try {
         const targeted = await fetchTargetedSearch(
-          latitude, longitude, radiusMeters,
+          latitude, longitude, searchRadius,
           GOOGLE_PLACES_API_KEY, query, 8
         );
         console.log(`[targeted] "${query}": ${targeted.length} résultats`);
@@ -1115,14 +1170,74 @@ app.post('/generer-activites', async (req, res) => {
     }
 
     console.log(`[places] pool total après targeted searches: ${deduped.length} lieux`);
+
+    // ── Extension montagne Nature : 25 km → 40 km → 60 km ────────────────────────
+    // Uniquement pour Nature. Cherche des destinations montagne fortes au-delà de 15 km.
+    if (activityIntent === 'nature') {
+      let qualMountain = 0;
+      for (const mr of NATURE_MOUNTAIN_RADII) {
+        for (const query of NATURE_MOUNTAIN_QUERIES) {
+          try {
+            const tm = await fetchTargetedSearch(latitude, longitude, mr, GOOGLE_PLACES_API_KEY, query, 5);
+            const norm = filterFamilyActivities(tm.map(normalizePlace).filter(isFamilyPlace));
+            deduped = deduplicate([...deduped, ...norm]);
+          } catch (e) {
+            console.warn(`[nature:mountain] radius=${mr} query="${query}" échoue:`, e.message);
+          }
+        }
+        qualMountain = deduped.filter(p => {
+          if (p.lat == null || p.lon == null) return false;
+          const dKm = haversineKm(latitude, longitude, p.lat, p.lon);
+          if (dKm <= 15) return false;
+          if (isNatureDangerousMount(p)) return false;
+          const score = getFamilyActivityScore(p);
+          if (score < getNatureMinScore(dKm)) return false;
+          if (dKm > 25 && !hasMountainSignal(p)) return false;
+          return true;
+        }).length;
+        console.log(`[nature:mountain] pass radius=${mr} qualifyingMountain=${qualMountain}`);
+        if (qualMountain >= 2) break;
+      }
+      console.log(`[nature:mountain] total qualifying: ${qualMountain}`);
+    }
+
+    // Filtres Nature — montagne dangereuse + distance×qualité + signal montagne si >25 km
+    if (activityIntent === 'nature') {
+      const before = deduped.length;
+      deduped = deduped.filter(p => {
+        if (/\b(parking|car\s+park|stationnement)\b/i.test(p.name ?? '')) {
+          console.log(`[nature] rejected reason=parking_name name="${p.name}"`);
+          return false;
+        }
+        if (isNatureDangerousMount(p)) {
+          console.log(`[nature] rejected reason=mountain_dangerous name="${p.name}"`);
+          return false;
+        }
+        if (p.lat == null || p.lon == null) return true;
+        const dKm = haversineKm(latitude, longitude, p.lat, p.lon);
+        const minScore = getNatureMinScore(dKm);
+        const score = getFamilyActivityScore(p);
+        if (score < minScore) {
+          console.log(`[nature] rejected reason=distance_quality score=${score} minRequired=${minScore} distance=${dKm.toFixed(1)}km name="${p.name}"`);
+          return false;
+        }
+        if (dKm > 25 && !hasMountainSignal(p)) {
+          console.log(`[nature] rejected reason=mountain_signal_missing distance=${dKm.toFixed(1)}km name="${p.name}"`);
+          return false;
+        }
+        return true;
+      });
+      console.log(`[nature] filters: ${before} → ${deduped.length} lieux`);
+    }
+
     let fresh = excludeSet.size > 0 ? deduped.filter(p => !excludeSet.has(p.sourceId)) : deduped;
 
     // 4b. Filtre qualité à longue distance — éviter cafés/parcs génériques loin
-    if (radiusMeters > 40000 && fresh.length >= 3) {
+    if (searchRadius > 40000 && fresh.length >= 3) {
       const highValue = fresh.filter(p => p.types.some(t => HIGH_VALUE_LONG_DISTANCE.has(t)));
       if (highValue.length >= 3) {
         fresh = highValue;
-        console.log(`[backend] Filtre qualité longue distance (${radiusMeters}m): ${fresh.length} lieux haute valeur`);
+        console.log(`[backend] Filtre qualité longue distance (${searchRadius}m): ${fresh.length} lieux haute valeur`);
       }
     }
 
@@ -1130,7 +1245,7 @@ app.post('/generer-activites', async (req, res) => {
     if (fresh.length < 3) {
       console.log(`[refresh] Seulement ${fresh.length} candidats (excludeCount=${excludeSet.size}) — rayon élargi`);
       try {
-        const widerRadius = expandRadius(radiusMeters);
+        const widerRadius = expandRadius(searchRadius);
         const rawPlaces2 = await fetchNearbyPlaces(
           latitude, longitude, widerRadius, GOOGLE_PLACES_API_KEY, (searchGroup + 1) % 4, null
         );
@@ -1178,7 +1293,7 @@ app.post('/generer-activites', async (req, res) => {
     });
     console.log(`[proximity] Candidats triés: ${fresh.slice(0, 3).map(p => p.name + ' (' + (p.lat != null ? haversineKm(latitude, longitude, p.lat, p.lon).toFixed(1) : '?') + 'km)').join(', ')}`);
 
-    console.log(`[refresh] count=${refreshCount} radius=${radiusMeters} searchGroup=${searchGroup} excludeCount=${excludeSet.size}`);
+    console.log(`[refresh] count=${refreshCount} radius=${searchRadius} searchGroup=${searchGroup} excludeCount=${excludeSet.size}`);
     candidates = fresh.slice(0, 8);
     if (!candidates.length) {
       // All nearby places are excluded — serve raw fallback without exclusion
